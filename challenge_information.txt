@@ -1,0 +1,20 @@
+About the challenge
+Hack for Humanity is a hackathon that brings developers together in a 1-month event to come up with unique and creative solutions to mental and physical health issues, with an optional focus on AI. The participants' goal is to use technology to make meaningful changes in humanity by addressing health concerns.
+
+You may work individually or in teams of 2-4.
+
+Prior experience is not required! Participants of any skill level are welcome to participate and work together in this hackathon. 
+
+Requirements
+What to Build
+You must build software (such as an app, website, or game) that improves mental or physical well-being. In addition to the core Mental Health and Physical Health categories, your project can compete in several dedicated tracks:
+
+Best Use of AI/ML & Responsible AI: For projects implementing machine learning.
+Best Tech for Concussion Recovery: For projects addressing brain injury recovery
+Additional prizes for Best Design (Presented by Better Design), Girls Who Code Future Innovator Award, Best Use of Render, Best Innovation and Creativity, and the Public Voting Winner.
+What to Submit
+Software: Include the GitHub repository for your software with the functioning source code.
+Video: A video (4 min max) explaining
+The issue you're solving
+Your submitted software and its functionality in detail
+An overview of how it was created

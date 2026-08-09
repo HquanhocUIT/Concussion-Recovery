@@ -1,0 +1,169 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ============================================
+   LIQUID GLASS UI — Global Keyframes & Utils
+   ============================================ */
+
+@keyframes blob {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  33%  { transform: translate(30px, -50px) scale(1.1); }
+  66%  { transform: translate(-20px, 20px) scale(0.9); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+@keyframes data-module-shimmer {
+  0% {
+    transform: translateX(-145%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.22;
+  }
+  100% {
+    transform: translateX(145%);
+    opacity: 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-12px); }
+}
+
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+  50%       { box-shadow: 0 0 20px 8px rgba(59,130,246,0.15); }
+}
+
+@keyframes earth-rotate {
+  from { background-position: 0% center; }
+  to   { background-position: 200% center; }
+}
+
+.animate-blob          { animation: blob 7s infinite; }
+.animate-shimmer       { animation: shimmer 2s infinite; }
+.animate-earth         { animation: earth-rotate 30s linear infinite; }
+.animate-float         { animation: float 6s ease-in-out infinite; }
+.animate-gradient-shift { animation: gradient-shift 8s ease infinite; background-size: 200% 200%; }
+.animate-pulse-glow    { animation: pulse-glow 3s ease-in-out infinite; }
+
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-4000 { animation-delay: 4s; }
+
+/* Custom scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.4); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.7); }
+
+.dark ::-webkit-scrollbar-thumb { background: rgba(71,85,105,0.5); }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.8); }
+
+/* ============================================
+   ANALYTICS DESIGN SYSTEM — Liquid Glass
+   Matching "The Ethereal Academic" design spec
+   ============================================ */
+
+.analytics-liquid-bg {
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(226, 255, 248, 0.85) 0px, transparent 55%),
+    radial-gradient(ellipse at 100% 0%, rgba(233, 221, 255, 0.75) 0px, transparent 55%),
+    radial-gradient(ellipse at 100% 100%, rgba(255, 153, 202, 0.6) 0px, transparent 50%),
+    radial-gradient(ellipse at 0% 100%, rgba(91, 244, 222, 0.55) 0px, transparent 50%),
+    #f7f9fb;
+}
+
+.analytics-glass-card {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.dark .analytics-liquid-bg {
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(0, 107, 96, 0.25) 0px, transparent 55%),
+    radial-gradient(ellipse at 100% 0%, rgba(110, 59, 216, 0.2) 0px, transparent 55%),
+    radial-gradient(ellipse at 100% 100%, rgba(165, 49, 115, 0.2) 0px, transparent 50%),
+    radial-gradient(ellipse at 0% 100%, rgba(91, 244, 222, 0.15) 0px, transparent 50%),
+    #0b0f10;
+}
+
+.dark .analytics-glass-card {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+/* Header Data Module glass shell: shimmer runs only on hover */
+.data-module-glass-shell {
+  position: relative;
+  border-radius: 9999px;
+  padding: 1px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.data-module-glass-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.data-module-glass-shell::after {
+  content: "";
+  position: absolute;
+  top: 6%;
+  bottom: 6%;
+  width: 38%;
+  left: -45%;
+  border-radius: 9999px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 3;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.62) 46%,
+    rgba(255, 255, 255, 0.18) 64%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.data-module-glass-shell:hover::after {
+  animation: data-module-shimmer 0.95s ease-out 1;
+}
+
+.data-module-glass-shell-light {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.48) 100%);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.1);
+}
+
+.data-module-glass-shell-light::before {
+  background: radial-gradient(130% 125% at 18% 0%, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.18) 45%, rgba(255, 255, 255, 0) 100%);
+}
+
+.data-module-glass-shell-dark {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.1) 100%);
+  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.42);
+}
+
+.data-module-glass-shell-dark::before {
+  background: radial-gradient(125% 120% at 20% 0%, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.1) 44%, rgba(255, 255, 255, 0) 100%);
+}
+
