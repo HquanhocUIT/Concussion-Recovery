@@ -1,0 +1,17 @@
+embedding:
+  model: sentence-transformers/all-MiniLM-L6-v2
+
+vectordb:
+  provider: chroma
+  persist_directory: ./data/processed/chroma
+
+chunking:
+  chunk_size: 500
+  chunk_overlap: 50
+
+retrieval:
+  top_k: 5
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-5

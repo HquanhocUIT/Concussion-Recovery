@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reentry
+      POSTGRES_PASSWORD: reentry
+      POSTGRES_DB: reentry
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  rag:
+    build:
+      context: ./rag
+    restart: unless-stopped
+    env_file:
+      - ./rag/.env
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./rag/data:/app/data
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://reentry:reentry@db:5432/reentry
+      RAG_SERVICE_URL: http://rag:8100
+    depends_on:
+      - db
+      - rag
+    ports:
+      - "8000:8000"
+
+volumes:
+  db_data:

@@ -1,0 +1,12 @@
+﻿Track,Phase,Dataset,Model,Note
+Track A - Signal (Người A),Phase 1 - Onboarding & Daily Check-in (Tuần 1),synthetic_checkins.csv,(chưa cần model),
+Track A - Signal (Người A),Phase 2 - Recovery Intelligence (Tuần 2),synthetic_checkins.csv (từ Phase 1),Rolling average + threshold rules,
+Track A - Signal (Người A),Phase 3 - Scenario Simulation Engine (Tuần 3),activity_load_table.json,Weighted sum formula (rule-based),
+Track A - Signal (Người A),Phase 4 - Frontend integration & polish (Tuần 4),(nối API thật),(không áp dụng),
+Track B - Decision (Người B),Phase 1 - Guideline corpus & RAG ingestion (Tuần 1),6th CIS Consensus Statement + Living Concussion Guidelines + PedsConcussion (PDF chính thức),all-MiniLM-L6-v2 + Chroma,
+Track B - Decision (Người B),Phase 2 - Retrieval + re-ranking + Safety guardrails (Tuần 2),red_flag_rules.json,Retriever (top_k=5) + re-ranking + rule-based classifier,
+Track B - Decision (Người B),Phase 3 - Recovery Planner & Orchestrator (Tuần 3),(nhận output từ Track A),Rule-based search + Claude Sonnet 5,
+Track B - Decision (Người B),Phase 4 - Explainability UI & demo hardening (Tuần 4),3 kịch bản demo,(không áp dụng),
+Track A + B - Chung (Cả 2 người),Phase 5 - UI/UX polish & accessibility (Tuần 4 cuối),(không áp dụng),(không áp dụng),
+Track A + B - Chung (Cả 2 người),Phase 5 - Research documentation & citation (Tuần 4 cuối),(không áp dụng),(không áp dụng),
+Track A + B - Chung (Cả 2 người),Phase 5 - Pitch & Video submission 4 phút (Tuần 4 cuối),(không áp dụng),(không áp dụng),

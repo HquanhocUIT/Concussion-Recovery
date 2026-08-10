@@ -13,6 +13,7 @@ __pycache__/
 venv/
 env/
 *.egg-info/
+.pytest_cache/
 
 # Environment secrets
 .env
@@ -29,6 +30,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+!rag/logs/
+rag/logs/*
+!rag/logs/.gitkeep
 npm-debug.log*
 
 # Build artifacts

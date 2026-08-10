@@ -79,6 +79,9 @@ RE:ENTRY **không chẩn đoán và không thay thế bác sĩ**. Đây là côn
 ```
 concussion-recovery/
 ├── README.md
+├── docker-compose.yml              # dựng db + backend + rag cùng lúc cho local dev
+├── .dockerignore
+├── .github/workflows/ci.yml        # CI: build/test backend, rag, frontend; build Docker image làm artifact
 ├── docs/                          # Pitch deck, kiến trúc, luồng dữ liệu, video demo script
 │
 ├── frontend/                       # Web app (Vite + React + TypeScript, kế thừa từ UI mindscan-ai)
@@ -133,11 +136,15 @@ concussion-recovery/
 │   │   │   └── llm_composer.py     #     ghép kết quả thành câu trả lời + confidence, gọi LLM client trong rag/
 │   │   │
 │   │   └── db/                     # DB session, migrations helper
-│   └── tests/
+│   ├── tests/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── .env.example
 │
 ├── rag/                            # (4) RAG evidence layer — CHỈ giải thích/chứng minh, không quyết định
-│   ├── README.md
+│   ├── Dockerfile
 │   ├── requirements.txt
+│   ├── .env.example
 │   ├── config.yaml
 │   ├── main.py
 │   ├── src/
@@ -166,7 +173,27 @@ concussion-recovery/
 
 ---
 
-## 4. Tech Stack (đề xuất)
+## 4. Chạy dự án (local)
+
+```bash
+# Backend + RAG + PostgreSQL cùng lúc
+cp backend/.env.example backend/.env
+cp rag/.env.example rag/.env
+docker compose up --build
+# backend: http://localhost:8000/health
+# rag:     http://localhost:8100/health
+
+# Frontend (chạy riêng, không Dockerize)
+cd frontend
+npm install
+npm run dev
+```
+
+CI (`.github/workflows/ci.yml`) tự động chạy test + build Docker image cho `backend`/`rag` và typecheck + build cho `frontend` mỗi khi push/PR vào `main`.
+
+---
+
+## 5. Tech Stack (đề xuất)
 
 | Layer | Công nghệ |
 |---|---|
@@ -179,7 +206,7 @@ concussion-recovery/
 
 ---
 
-## 5. Roadmap MVP (trong khuôn khổ 1 tháng hackathon)
+## 6. Roadmap MVP (trong khuôn khổ 1 tháng hackathon)
 
 1. **Onboarding & Data model**: thông tin ban đầu (ngày bị concussion, tuổi, giới tính, công việc, mức hoạt động) + Daily Check-in flow (đau đầu, chóng mặt, giấc ngủ, thời gian dùng máy tính/học/tập thể dục, tâm trạng...).
 2. **Recovery Intelligence**: phân tích lịch sử check-in → build Recovery Profile (Stage, Capacity, Trend, Buffer).
