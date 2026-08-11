@@ -1,4 +1,4 @@
-# RE:ENTRY — AI Recovery Scenario Engine
+# RE:ENTRY — AI Recovery Scenario Engine HTTN
 
 > **Existing tools help people track recovery. RE:ENTRY helps them plan their return to real life.**
 
