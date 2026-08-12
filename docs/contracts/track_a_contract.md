@@ -1,7 +1,7 @@
-# Track A Contract (v2 — REVISED, FOR REVIEW)
+# Track A Contract (v2 — APPROVED / FROZEN FOR TRACK A IMPLEMENTATION ARCHITECTURE)
 
-**Status:** Proposed revision applying corrections from review round 2. Not yet frozen — still pending sign-off. No implementation may begin until approved.
-**Applies:** all five round-1 decisions + all ten round-2 corrections.
+**Status:** Approved and frozen for Track A implementation architecture, incorporating round-1 decisions, round-2 corrections, and the round-3 documentation corrections (field-name alignment, canonical E-006a wording, removal of unauthorized fields, §42 contradictory-data ownership). This document governs Track A's data model, schemas, and API contract. Any further change requires an explicit new review round.
+**Applies:** all five round-1 decisions + all ten round-2 corrections + all round-3 documentation corrections.
 
 ---
 
@@ -23,7 +23,7 @@ Not built for MVP (unchanged rationale from v1): `plans` as a standalone entity,
 ```text
 user_id         string, primary key   e.g. "demo_improving"
 display_name    string
-persona_type    enum: improving | stable | overload | insufficient_data | custom
+persona_type    enum: improving | stable | overload | insufficient_data
 created_at      timestamp
 ```
 
@@ -44,7 +44,6 @@ screen_time_minutes            int, >=0
 study_work_minutes             int, >=0
 symptoms_worsened_after_activity  enum: not_applicable | no | mild | moderate | severe
 mood                           int, 0-3, nullable   (display/context only — never scored, E-008)
-notes                          string, nullable, max 500 chars
 created_at                     timestamp
 updated_at                     timestamp, nullable   — set on upsert
 ```
@@ -74,6 +73,35 @@ result                   json   — Scenario Result (see §4.2)
 ```
 
 Stored as a snapshot for reproducible before/after comparison, unchanged from v1.
+
+### 1.5 RE_ENTRY.md §42 — Contradictory Data (ownership resolved, round-3 correction #5)
+
+**Ownership:** Detecting internally inconsistent check-in submissions is **Track A's responsibility**, as an extension of the input validation Track A already owns for `POST /check-ins`. It is not part of Track B's Safety Layer, since it concerns the structural validity of a single submission, not a clinical red-flag judgment. This does not introduce a new endpoint or a new field — it is a validation rule applied within the existing `POST /check-ins` request handling, reported through the existing 422 error contract already defined in §6.
+
+**What Track A validates:** Using only the fields already present in the frozen `daily_checkins` schema (§1.2), a submission is flagged as internally contradictory if the self-reported time-based fields for the same `checkin_date` are jointly impossible within a single day:
+
+```text
+screen_time_minutes + study_work_minutes + (sleep_hours × 60, if sleep_hours is provided) > 1440
+```
+
+(1440 = minutes in a day.) This is a pure arithmetic bound on fields the user themselves reported for the same day — not a clinical judgment, not a new field, and not an inference about any field not already in the schema. No other cross-field contradiction is defined, since the frozen schema has no second, independent data source (e.g., a device-reported sleep log) that a self-report could conflict with — inventing one would be a new feature, which this correction explicitly avoids.
+
+**What Track A returns:** The existing `POST /check-ins` validation-error response (§6, 422) is used unchanged in shape, with this check added as one more validation rule:
+
+```json
+{
+  "status": "error",
+  "error_type": "validation_error",
+  "details": [
+    {
+      "field": "screen_time_minutes,study_work_minutes,sleep_hours",
+      "issue": "Reported values for this day exceed 24 hours combined. Please review and resubmit."
+    }
+  ]
+}
+```
+
+The check-in is **not saved** in this state — consistent with how every other validation rule in this schema already behaves (out-of-range 0–3 scale values, future dates, etc.), and consistent with `RE_ENTRY.md` §42's instruction not to silently resolve a conflict. This keeps the behavior inside the mechanism Track A already owns, rather than adding a blocking/escalation feature, which remains Track B Safety's domain (`RE_ENTRY.md` §34–38) for any future red-flag-level conflict Track B may define on top of this.
 
 ---
 
@@ -110,10 +138,10 @@ strong         : >= 14 check-ins in the last 14 days
 
   "observed_patterns": [
     {
-      "pattern_id": "cognitive_load_next_day_symptoms",
+      "pattern_id": "study_work_exposure_next_day_symptoms",
       "type": "activity_response",
       "category": "user_specific_observed_pattern",
-      "description": "Higher modeled cognitive-demand days have been followed by higher reported symptoms in this user's recent records.",
+      "description": "In your recent records, days with higher study/work exposure have been followed by higher reported symptoms the next day.",
       "strength": "moderate",
       "basis": "user_pattern",
       "supporting_days": 5,
@@ -211,7 +239,7 @@ Still no numeric percentage / "capacity" field anywhere in this schema.
       "factor": "recent_pattern_context",
       "category": "user_specific_observed_pattern",
       "direction": "increases_concern",
-      "description": "In this user's recent records, higher modeled cognitive-demand days have been followed by higher reported symptoms.",
+      "description": "In your recent records, days with higher study/work exposure have been followed by higher reported symptoms the next day.",
       "activity_attributed": true
     }
   ],
@@ -279,7 +307,7 @@ Response — **resubmission for an existing `(user_id, checkin_date)`** (200):
 { "checkin_id": "chk_00113", "status": "updated" }
 ```
 
-Response (validation error, 422): unchanged from v1.
+Response (validation error, 422): unchanged from v1, now including the contradictory-data check defined in §1.5 (round-3 correction #5) as one additional validation rule under this same error shape.
 
 This resolves the round-1 open item: resubmission is always an update to the existing row (identified by the unique `(user_id, checkin_date)` constraint), never a duplicate insert and never a rejected conflict.
 
@@ -300,7 +328,7 @@ Backend enums (`trend`, `data_sufficiency`, `uncertainty`, etc.) are internal id
 | "Your recovery is improving" | "Your recent symptom pattern: improving" |
 | "You are recovered" | (not a claim this system makes, ever) |
 | "This plan is medically unsafe" | "This plan has higher modeled demand relative to your recent pattern" |
-| "Coding caused your headache" | "In your recent records, higher cognitive-demand days have been followed by higher reported symptoms" |
+| "Coding caused your headache" | "In your recent records, days with higher study/work exposure have been followed by higher reported symptoms the next day" |
 
 ---
 

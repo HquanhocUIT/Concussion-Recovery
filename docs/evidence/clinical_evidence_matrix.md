@@ -1,6 +1,6 @@
-# Track A — Clinical Evidence Matrix (v2 — REVISED, FOR REVIEW)
+# Track A — Clinical Evidence Matrix (v2 — APPROVED / FROZEN FOR TRACK A IMPLEMENTATION ARCHITECTURE)
 
-**Status:** Proposed revision applying corrections from review round 2. Still not approved for implementation.
+**Status:** Approved and frozen for Track A implementation architecture, incorporating round-1 decisions, round-2 corrections, and the round-3 documentation corrections (canonical field name, canonical E-006a dimension vocabulary). This document governs how Track A code may classify and use clinical claims, user-specific patterns, and engineering heuristics. Citation verification against ingested guideline text (Track B ownership) remains PENDING throughout — see §D.1 Evidence Gate, which is unaffected by this approval and still applies.
 **Scope:** Track A check-in fields and activity-load parameters only. Red-flag/diagnosis/treatment logic remains Track B's Safety layer.
 
 ## How to read this matrix
@@ -59,7 +59,7 @@ Same structure. **Forbidden:** must not be used to infer GI or vestibular diagno
 - **Test:** `test_activity_response_worsening_*`
 
 **E-006a — Activity-specific attribution governance (correction #9):**
-An observed pattern may only name a *specific activity type* (e.g., "cognitive-demand days") if the check-in data actually establishes both:
+An observed pattern may only name a *specific exposure dimension* (i.e., one of "screen exposure," "study/work exposure," or "combined cognitive/screen exposure," per the E-006a design note) if the check-in data actually establishes both:
 1. which activity/activities occurred on the exposure day (not just an aggregate demand number), and
 2. a consistent temporal relationship (exposure day → next reported day) across at least the minimum-pairing threshold (§2 of the contract, currently 3 qualifying day-pairs).
 
@@ -93,7 +93,7 @@ If the data cannot establish which activity type was involved (e.g., only an agg
 - **Exact supporting passage:** PENDING
 - **Test:** `test_workload_screen_time_*`
 
-### E-010 — `study_work_duration`
+### E-010 — `study_work_minutes`
 Same governance as E-009 for cognitive exertion. **Forbidden:** no minute-based threshold is clinically validated. **Exact supporting passage:** PENDING. **Test:** `test_workload_study_*`.
 
 ### E-011 — Activity ontology weights (`activity_catalog` table: `cognitive_demand_weight`, `physical_demand_weight`, `screen_exposure_weight`, `recovery_opportunity`)
