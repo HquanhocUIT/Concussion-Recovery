@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes.recovery import router as recovery_router
 
 from app.api.routes.checkins import router as checkins_router
+from app.api.routes.scenario import router as scenario_router
 from app.services.checkin_validation import CheckinValidationError
 
 
@@ -69,6 +70,7 @@ async def checkin_validation_error_handler(
 
 
 app.include_router(checkins_router)
+app.include_router(scenario_router)
 app.include_router(recovery_router)
 
 
