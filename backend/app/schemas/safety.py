@@ -10,6 +10,12 @@ SafetyState = Literal[
 ]
 
 
+class SafetyInput(BaseModel):
+    worsening_headache: bool = False
+    repeated_vomiting: bool = False
+    neurological_danger_sign: bool = False
+
+
 class SafetyResult(BaseModel):
     safety_state: SafetyState
     triggered_rule_ids: list[str]
