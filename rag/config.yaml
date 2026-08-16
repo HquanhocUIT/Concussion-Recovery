@@ -3,7 +3,7 @@ embedding:
 
 vectordb:
   provider: chroma
-  persist_directory: ./data/processed/chroma
+  persist_directory: data/processed/chroma
 
 chunking:
   chunk_size: 500
