@@ -39,3 +39,6 @@ npm-debug.log*
 *.pkl
 build/
 .cache/
+
+# Generated RAG index (rebuild with: cd rag; python main.py ingest)
+rag/data/processed/chroma/

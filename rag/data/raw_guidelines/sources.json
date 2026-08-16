@@ -1,0 +1,39 @@
+[
+  {
+    "filename": "amsterdam_2022_consensus.pdf",
+    "source_id": "amsterdam-2022-consensus",
+    "title": "Consensus statement on concussion in sport: the 6th International Conference on Concussion in Sport-Amsterdam, October 2022",
+    "short_title": "Amsterdam 2022 Consensus Statement",
+    "publisher": "British Journal of Sports Medicine",
+    "year": 2023,
+    "audience": "sport-related concussion",
+    "canonical_url": "https://bjsm.bmj.com/content/57/11/695",
+    "doi": "10.1136/bjsports-2023-106898",
+    "sha256": "3a88f9c36466711cea158780bea58340cb7c66261d03f95e251c3e7e716c0442",
+    "download_url": "https://braincare.swiss/wp-content/uploads/2024/02/Consensus-Statement-2023.pdf"
+  },
+  {
+    "filename": "living_concussion_guidelines_adults_3rd_ed.pdf",
+    "source_id": "living-concussion-guidelines-adults-3e",
+    "title": "Guideline for Concussion/Mild Traumatic Brain Injury & Prolonged Symptoms, Third Edition",
+    "short_title": "Living Concussion Guidelines (Adults)",
+    "publisher": "Ontario Neurotrauma Foundation",
+    "year": 2018,
+    "audience": "adults 18 years and older",
+    "canonical_url": "https://concussionsontario.org/",
+    "sha256": "4d6ef69fedb7a811f726424bd6083602b26fdf5ee50742a324a3dd8f1a8ca182",
+    "download_url": "https://concussionsontario.org/sites/default/files/2023-03/Third_Edition.pdf"
+  },
+  {
+    "filename": "pedsconcussion_living_guideline.pdf",
+    "source_id": "pedsconcussion-living-guideline",
+    "title": "Living Guideline for Diagnosing and Managing Pediatric Concussion",
+    "short_title": "PedsConcussion Living Guideline",
+    "publisher": "PedsConcussion",
+    "year": 2019,
+    "audience": "children and adolescents",
+    "canonical_url": "https://pedsconcussion.com/",
+    "sha256": "8bef4bd5d6823fe5576c751f80aa3052a1b25454cd16689591b75ae7213b5a5e",
+    "download_url": "https://pedsconcussion.com/wp-content/uploads/2020/09/Living-Guideline-for-Diagnosing-and-Managing-Pediatric-Concussion-v09.15.2019.pdf"
+  }
+]
