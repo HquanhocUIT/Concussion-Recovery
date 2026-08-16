@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -63,6 +64,7 @@ class ExplanationFactor(BaseModel):
 class ScenarioResult(BaseModel):
     simulation_id: str
     user_id: str
+    created_at: datetime
 
     recovery_state_snapshot: dict
 
