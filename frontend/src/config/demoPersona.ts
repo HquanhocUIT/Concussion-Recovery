@@ -1,0 +1,1 @@
+export const ACTIVE_DEMO_USER_ID = 'demo_stable';

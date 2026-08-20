@@ -47,7 +47,13 @@ import {
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { Player } from '@lottiefiles/react-lottie-player';
-import { analyzeSurveyData } from './services/geminiService';
+import { createCheckin, getRecoveryProfile } from './services/api';
+import { mapFormDataToCheckinCreate } from './services/checkinMapper';
+import {
+  adaptRecoveryProfile,
+  viewModelToAIRecommendation,
+} from './services/recoveryAdapter';
+import { ACTIVE_DEMO_USER_ID } from './config/demoPersona';
 import type { AIRecommendation } from './types';
 import { translations } from './translations';
 
@@ -456,23 +462,38 @@ const featureLabels: Record<string, Record<string, string>> = {
       setCurrentStep(prev => prev + 1);
     } else {
       setIsAnalyzing(true);
-      setIsCompleted(true);
+
       try {
-        // Chạy song song: gọi API và bộ đếm giờ 3 giây (3000ms)
-        const [result] = await Promise.all([
-          analyzeSurveyData(formData, language),
-          new Promise(resolve => setTimeout(resolve, 3000))
+        const todayIso = new Date().toISOString().slice(0, 10);
+
+        const checkinPayload = mapFormDataToCheckinCreate(
+          formData,
+          ACTIVE_DEMO_USER_ID,
+          todayIso
+        );
+
+        const [profile] = await Promise.all([
+          (async () => {
+            await createCheckin(checkinPayload);
+            return getRecoveryProfile(ACTIVE_DEMO_USER_ID);
+          })(),
+
+          new Promise(resolve => setTimeout(resolve, 3000)),
         ]);
 
-        // Colors and display names are already mapped by geminiService.ts.
-        // No re-mapping needed here — just set the result directly.
+        const viewModel = adaptRecoveryProfile(profile);
+        const result = viewModelToAIRecommendation(viewModel);
+
         setAiResult(result);
         saveToHistory(result);
+        setIsCompleted(true);
+
         if (result.recovery_load_level === 'High') {
           setShowEmergencyModal(true);
         }
       } catch (error) {
         console.error("Error analyzing data:", error);
+        setIsCompleted(false);
       } finally {
         setIsAnalyzing(false);
       }

@@ -38,17 +38,18 @@ def test_good_alignment_low_demand_plan_with_rest():
     assert result.modeled_overload is False
 
 
-def test_moderate_concern_one_high_dimension():
+
+def test_moderate_concern_exactly_one_high_dimension():
     result = simulate_scenario(
         _recovery_state(),
-        [
-            ActivityInput(activity_id="coding", duration_minutes=30),
-            ActivityInput(activity_id="rest", duration_minutes=90),
-        ],
+        [ActivityInput(activity_id="studying", duration_minutes=60)],
     )
-    # coding(30) + rest(90): cognitive weighted = (80*30)/120=20 -> low actually.
-    # Use a case that reliably produces exactly one high dimension instead.
-    assert result.plan_recovery_alignment in ("good_alignment", "moderate_concern")
+    assert result.modeled_demand.cognitive_demand_level == "high"
+    assert result.modeled_demand.physical_demand_level == "low"
+    assert result.modeled_demand.screen_exposure_level == "medium"
+    assert result.plan_recovery_alignment == "moderate_concern"
+    assert result.modeled_overload is False
+
 
 
 def test_low_alignment_and_overload_high_demand_plan():
