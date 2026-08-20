@@ -65,35 +65,60 @@ def simulate_scenario(
 
     data_insufficient = recovery_state.data_sufficiency == "insufficient"
 
+    # --- scenario structure ---
+    has_recovery_activity = _has_declared_recovery_activity(activities)
+    long_block = _find_long_block(activities)
+
     # --- plan_recovery_alignment ---
     if data_insufficient:
         plan_recovery_alignment = "insufficient_data_to_assess"
     else:
         high_count = sum(
             1
-            for field in ("cognitive_demand_level", "physical_demand_level", "screen_exposure_level")
+            for field in (
+                "cognitive_demand_level",
+                "physical_demand_level",
+                "screen_exposure_level",
+            )
             if getattr(modeled_demand, field) == "high"
         )
-        if high_count == 0:
-            plan_recovery_alignment = "good_alignment"
-        elif high_count == 1:
-            plan_recovery_alignment = "moderate_concern"
-        else:
+
+        recovery_is_low = (
+            modeled_demand.recovery_opportunity_level == "low"
+        )
+
+        if high_count >= 2 or (
+            high_count >= 1 and long_block is not None
+        ):
             plan_recovery_alignment = "low_alignment"
+
+        elif (
+            high_count == 1
+            or long_block is not None
+            or (
+                not has_recovery_activity
+                and recovery_is_low
+            )
+        ):
+            plan_recovery_alignment = "moderate_concern"
+
+        else:
+            plan_recovery_alignment = "good_alignment"
 
     modeled_overload = plan_recovery_alignment == "low_alignment"
 
     # --- main_concerns (frozen vocabulary only) ---
     main_concerns: list[str] = []
+
     for field, concern in _DEMAND_CONCERN_MAP.items():
         if getattr(modeled_demand, field) == "high":
             main_concerns.append(concern)
 
-    has_recovery_activity = _has_declared_recovery_activity(activities)
     if not has_recovery_activity:
-        main_concerns.append("no_declared_recovery_activity_in_plan")
+        main_concerns.append(
+            "no_declared_recovery_activity_in_plan"
+        )
 
-    long_block = _find_long_block(activities)
     if long_block is not None:
         main_concerns.append("long_continuous_block")
 
