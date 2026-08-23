@@ -49,11 +49,22 @@ import {
   Legend
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  SCREEN_SCORE_TO_MINUTES,
+  DEFAULT_LIGHT_EXERCISE_MINUTES,
+  DEFAULT_REST_MINUTES,
+} from './config/recoveryConstants';
 import { Player } from '@lottiefiles/react-lottie-player';
-import { createCheckin, getRecoveryProfile } from './services/api';
+import {
+  createCheckin,
+  getRecoveryProfile,
+  createSimulation,
+} from './services/api';
 import { mapFormDataToCheckinCreate } from './services/checkinMapper';
+import type { ActivityInput } from './services/api';
 import {
   adaptRecoveryProfile,
+  mergeSimulationResult,
   viewModelToAIRecommendation,
 } from './services/recoveryAdapter';
 import {
@@ -61,7 +72,7 @@ import {
   DEFAULT_DEMO_PERSONA_ID,
   type DemoPersonaId,
 } from './config/demoPersona';
-import type { AIRecommendation } from './types';
+import type { AIRecommendation, FormData } from './types';
 import { translations } from './translations';
 
 
@@ -199,6 +210,44 @@ const LiquidButton = ({ children, onClick, variant = 'primary', className = "", 
       </span>
     </button>
   );
+};
+
+const buildActivitiesFromSurvey = (
+  formData: FormData
+): ActivityInput[] => {
+  const activities: ActivityInput[] = [];
+
+  const screenScore = Number(formData.screen_time ?? 0);
+
+  if (screenScore > 0) {
+    activities.push({
+      activity_id: 'phone_social_media',
+      duration_minutes: screenScore * SCREEN_SCORE_TO_MINUTES,
+    });
+  }
+
+  const studyHours = Number(formData.study_work_hours ?? 0);
+
+  if (studyHours > 0) {
+    activities.push({
+      activity_id: 'studying',
+      duration_minutes: Math.round(studyHours * 60),
+    });
+  }
+
+  if (formData.exercised_today === 'yes') {
+    activities.push({
+      activity_id: 'light_exercise',
+      duration_minutes: DEFAULT_LIGHT_EXERCISE_MINUTES,
+    });
+  }
+
+  activities.push({
+    activity_id: 'rest',
+    duration_minutes: DEFAULT_REST_MINUTES,
+  });
+
+  return activities;
 };
 
 
@@ -458,18 +507,19 @@ const featureLabels: Record<string, Record<string, string>> = {
 
     const loadRecoveryProfile = async () => {
       try {
-        const profile = await getRecoveryProfile(activeDemoUserId);
+        const profile = await getRecoveryProfile(
+          activeDemoUserId
+        );
 
         if (!cancelled) {
           setRecoveryProfile(profile);
-
-          const viewModel = adaptRecoveryProfile(profile);
-          const result = viewModelToAIRecommendation(viewModel);
-
-          setAiResult(result);
         }
+
       } catch (error) {
-        console.error('Failed to load recovery profile:', error);
+        console.error(
+          'Failed to load recovery profile:',
+          error
+        );
 
         if (!cancelled) {
           setRecoveryProfile(null);
@@ -488,55 +538,139 @@ const featureLabels: Record<string, Record<string, string>> = {
     // Validate required fields on step 1
     if (currentStep === 1) {
       const age = parseInt(formData.age as any);
+
       if (!formData.age || isNaN(age) || age < 10 || age > 100) {
         setStepError(t('survey.errors.invalidAge'));
         return;
       }
+
       if (!formData.gender) {
         setStepError(t('survey.errors.selectGender'));
         return;
       }
     }
+
     setStepError('');
+
     if (currentStep < 5) {
       setCurrentStep(prev => prev + 1);
-    } else {
-      setIsAnalyzing(true);
 
-      try {
-        const todayIso = new Date().toISOString().slice(0, 10);
+      return;
+    }
 
-        const checkinPayload = mapFormDataToCheckinCreate(
-          formData,
-          activeDemoUserId,
-          todayIso
-        );
+    setIsAnalyzing(true);
 
-        const [profile] = await Promise.all([
-          (async () => {
-            await createCheckin(checkinPayload);
-            return getRecoveryProfile(activeDemoUserId);
-          })(),
+    try {
+      const todayIso = new Date()
+        .toISOString()
+        .slice(0, 10);
 
-          new Promise(resolve => setTimeout(resolve, 3000)),
-        ]);
+      /*
+      * STEP 1:
+      * Survey → Check-in payload
+      */
+      const checkinPayload = mapFormDataToCheckinCreate(
+        formData,
+        activeDemoUserId,
+        todayIso
+      );
 
-        const viewModel = adaptRecoveryProfile(profile);
-        const result = viewModelToAIRecommendation(viewModel);
+      /*
+      * STEP 2:
+      * Save check-in → get latest recovery profile
+      */
+      const [profile] = await Promise.all([
+        (async () => {
+          await createCheckin(checkinPayload);
 
-        setAiResult(result);
-        saveToHistory(result);
-        setIsCompleted(true);
+          return getRecoveryProfile(
+            activeDemoUserId
+          );
+        })(),
 
-        if (result.recovery_load_level === 'High') {
-          setShowEmergencyModal(true);
-        }
-      } catch (error) {
-        console.error("Error analyzing data:", error);
-        setIsCompleted(false);
-      } finally {
-        setIsAnalyzing(false);
+        // Keep analyzing animation visible
+        new Promise(resolve =>
+          setTimeout(resolve, 3000)
+        ),
+      ]);
+
+      /*
+      * STEP 3:
+      * Recovery profile → ViewModel
+      */
+      let viewModel = adaptRecoveryProfile(profile);
+
+      /*
+      * STEP 4:
+      * Survey → Activity plan
+      */
+      const activities =
+        buildActivitiesFromSurvey(formData);
+
+      /*
+      * STEP 5:
+      * Run backend scenario simulation
+      */
+      const simulationResult =
+        await createSimulation({
+          user_id: activeDemoUserId,
+
+          activities,
+
+          label: 'Daily recovery activity plan',
+        });
+
+      /*
+      * STEP 6:
+      * Merge simulation into recovery state
+      */
+      viewModel = mergeSimulationResult(
+        viewModel,
+        simulationResult
+      );
+
+      /*
+      * STEP 7:
+      * Convert backend ViewModel → existing UI type
+      */
+      const result =
+        viewModelToAIRecommendation(viewModel);
+
+      /*
+      * STEP 8:
+      * Update UI
+      */
+      setRecoveryProfile(profile);
+
+      setAiResult(result);
+
+      saveToHistory(result);
+
+      setIsCompleted(true);
+
+      /*
+      * Safety / high concern
+      */
+      if (
+        result.recovery_load_level === 'High'
+      ) {
+        setShowEmergencyModal(true);
       }
+
+    } catch (error) {
+      console.error(
+        'Error analyzing data:',
+        error
+      );
+
+      setIsCompleted(false);
+
+      setStepError(
+        'Unable to analyze your recovery data. Please check that the backend is running and try again.'
+      );
+
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 

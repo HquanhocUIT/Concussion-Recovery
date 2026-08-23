@@ -1,19 +1,15 @@
 /**
- * Adapts real backend responses (RecoveryProfileResponse, ScenarioResult,
- * SafetyResult) into a small, self-contained view model.
+ * Backend response adapter for the existing UI.
  *
- * This does NOT assume the shape of the existing `AIRecommendation`
- * type (its exact fields were never confirmed in this session) — it
- * defines a fresh, minimal `RecoveryResultViewModel` instead. Wiring
- * this into the existing JSX/AIRecommendation-typed state is the one
- * remaining step that needs either the real `AIRecommendation`
- * interface or the ~30 lines around App.tsx:444-471 to do safely — see
- * the accompanying integration note.
+ * Backend-derived fields are preserved directly.
+ * `confidence_score` is a UI compatibility value derived from the
+ * backend's uncertainty and data_sufficiency enums because the existing
+ * AIRecommendation UI requires a numeric score.
  *
- * No score is invented here. Every field is copied straight from the
- * backend response or left explicitly absent — never randomized, never
- * recomputed on the frontend.
+ * It must not be interpreted as a clinical probability or recovery
+ * capacity measurement.
  */
+
 import type { AIRecommendation } from "../types";
 import type {
   ExplanationFactor,
@@ -113,17 +109,49 @@ export function trendDisplayText(trend: RecoveryProfileResponse["trend"]): strin
 export function toRecoveryLoadLevel(
   viewModel: RecoveryResultViewModel
 ): 'Low' | 'Medium' | 'High' {
-  if (viewModel.safetyBlocked) return 'High';
+
+  if (viewModel.safetyBlocked) {
+    return 'High';
+  }
 
   if (viewModel.simulation) {
-    if (viewModel.simulation.modeledOverload) return 'High';
-    if (viewModel.simulation.planRecoveryAlignment === 'moderate_concern') {
+    const alignment =
+      viewModel.simulation.planRecoveryAlignment;
+
+    if (
+      viewModel.simulation.modeledOverload ||
+      alignment === 'low_alignment'
+    ) {
+      return 'High';
+    }
+
+    if (
+      alignment === 'moderate_concern' ||
+      alignment === 'insufficient_data_to_assess'
+    ) {
       return 'Medium';
     }
+
     return 'Low';
   }
 
-  if (viewModel.trend === 'worsening') return 'Medium';
+  if (
+    viewModel.trend === 'worsening'
+  ) {
+    return 'Medium';
+  }
+
+  /**
+   * With no simulation, insufficient data should not be
+   * represented as a confirmed low load.
+   */
+  if (
+    viewModel.trend === 'insufficient_data' ||
+    viewModel.dataSufficiency === 'insufficient'
+  ) {
+    return 'Medium';
+  }
+
   return 'Low';
 }
 
