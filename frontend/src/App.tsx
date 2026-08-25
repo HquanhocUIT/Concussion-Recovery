@@ -35,6 +35,9 @@ import {
   Facebook,
   LayoutDashboard,
   TrendingUp,
+  TrendingDown,
+  Minus,
+  Database,
   Calendar,
   GitCompare,
   X,
@@ -46,9 +49,31 @@ import {
   Legend
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  SCREEN_SCORE_TO_MINUTES,
+  DEFAULT_REST_MINUTES,
+} from './config/recoveryConstants';
 import { Player } from '@lottiefiles/react-lottie-player';
-import { analyzeSurveyData } from './services/geminiService';
-import type { AIRecommendation } from './types';
+import {
+  createCheckin,
+  getCheckins,
+  getRecoveryProfile,
+  createSimulation,
+  ActivityInput,
+  CheckinListItem,
+} from './services/api';
+import { mapFormDataToCheckinCreate } from './services/checkinMapper';
+import {
+  adaptRecoveryProfile,
+  mergeSimulationResult,
+  viewModelToAIRecommendation,
+} from './services/recoveryAdapter';
+import {
+  DEMO_PERSONAS,
+  DEFAULT_DEMO_PERSONA_ID,
+  type DemoPersonaId,
+} from './config/demoPersona';
+import type { AIRecommendation, FormData } from './types';
 import { translations } from './translations';
 
 
@@ -188,11 +213,44 @@ const LiquidButton = ({ children, onClick, variant = 'primary', className = "", 
   );
 };
 
+const buildActivitiesFromSurvey = (
+  formData: FormData
+): ActivityInput[] => {
+  const activities: ActivityInput[] = [];
+
+  const screenScore = Number(formData.screen_time ?? 0);
+
+  if (screenScore > 0) {
+    activities.push({
+      activity_id: 'phone_social_media',
+      duration_minutes: screenScore * SCREEN_SCORE_TO_MINUTES,
+    });
+  }
+
+  const studyHours = Number(formData.study_work_hours ?? 0);
+
+  if (studyHours > 0) {
+    activities.push({
+      activity_id: 'studying',
+      duration_minutes: Math.round(studyHours * 60),
+    });
+  }
+
+  activities.push({
+    activity_id: 'rest',
+    duration_minutes: DEFAULT_REST_MINUTES,
+  });
+
+  return activities;
+};
+
 
 export default function App() {
   const [hasConsented, setHasConsented] = useState(false);
   const [showMotivational, setShowMotivational] = useState(false);
   const [language, setLanguage] = useState<'vi' | 'en'>(() => (localStorage.getItem('concussionrecovery_language') as any) || 'en');
+  const [activeDemoUserId, setActiveDemoUserId] = useState<DemoPersonaId>(DEFAULT_DEMO_PERSONA_ID);
+  const [recoveryProfile, setRecoveryProfile] = useState<Awaited<ReturnType<typeof getRecoveryProfile>> | null>(null);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [isSurveyOpen, setIsSurveyOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -208,7 +266,11 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('concussionrecovery_bookmarks') || '[]'); } catch { return []; }
   });
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
-  const [sessionHistory, setSessionHistory] = useState<any[]>([]);
+  const [checkins, setCheckins] = useState<
+    CheckinListItem[]
+  >([]);
+  const [checkinHistory, setCheckinHistory] =
+  useState<CheckinListItem[]>([]);
   const [sessionId, setSessionId] = useState<string>('');
   const [showAllRecs, setShowAllRecs] = useState(false);
   const [selectedActionDetail, setSelectedActionDetail] = useState<ActionCardItem | null>(null);
@@ -313,7 +375,7 @@ export default function App() {
     }
     return (typeof result === 'string' || Array.isArray(result)) ? result : key;
   };
-const featureLabels: Record<string, Record<string, string>> = {
+  const featureLabels: Record<string, Record<string, string>> = {
     headache:                   { vi: 'Đau đầu',                 en: 'Headache' },
     dizziness:                  { vi: 'Chóng mặt',               en: 'Dizziness' },
     blurred_vision:             { vi: 'Mờ mắt',                  en: 'Blurred Vision' },
@@ -339,28 +401,32 @@ const featureLabels: Record<string, Record<string, string>> = {
   const tWith = (key: string, vars: Record<string, string | number>) =>
     formatTemplate(t(key), vars);
 
-  const [formData, setFormData] = useState({
-    // Step 1: Basic Info
+  const [formData, setFormData] = useState<FormData>({
+    // Step 1
     age: '',
     gender: '',
     days_since_injury: '',
-    // Step 2: Today's Symptoms
+
+    // Step 2
     headache: 0,
     dizziness: 0,
     blurred_vision: 0,
     nausea: 0,
-    // Step 3: Physical
+
+    // Step 3
     sleep_quality: 0,
-    exercised_today: 'no' as 'yes' | 'no',
-    symptoms_worsened_after_activity: 'no' as 'yes' | 'no',
-    // Step 4: Cognitive Load
+    exercised_today: 'no',
+    symptoms_worsened_after_activity: 'no',
+
+    // Step 4
     screen_time: 0,
     study_work_hours: 0,
     concentration_difficulty: 0,
-    // Step 5: Mood & Recovery Context
+
+    // Step 5
     mood: 0,
     social_support: 0,
-    overwhelm_level: 0
+    overwhelm_level: 0,
   });
 
   const handleInputChange = (field: string, value: any) => {
@@ -386,22 +452,6 @@ const featureLabels: Record<string, Record<string, string>> = {
     }
     
   }, []);
-
-  const saveToHistory = (result: AIRecommendation) => {
-    // Store ISO date string; render uses locale-aware formatting at display time
-    const newEntry = {
-      date: new Date().toISOString().split('T')[0], // 'YYYY-MM-DD'
-      stressScore: result.recovery_load_level === 'High' ? 85 : result.recovery_load_level === 'Medium' ? 50 : 20,
-      level: result.recovery_load_level,
-      features: result.feature_importance
-    };
-    const sid = localStorage.getItem('concussionrecovery_session_id') || 'default';
-    const historyKey = `concussionrecovery_history_${sid}`;
-    const existing = JSON.parse(localStorage.getItem(historyKey) || '[]');
-    existing.push(newEntry);
-    if (existing.length > 30) existing.shift();
-    localStorage.setItem(historyKey, JSON.stringify(existing));
-  };
 
   // Format a stored ISO date string (YYYY-MM-DD) using the current locale
   const localeMap: Record<string, string> = { vi: 'vi-VN', en: 'en-US' };
@@ -438,44 +488,172 @@ const featureLabels: Record<string, Record<string, string>> = {
     });
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRecoveryData = async () => {
+      try {
+        const [profile, history] = await Promise.all([
+          getRecoveryProfile(activeDemoUserId),
+          getCheckins(activeDemoUserId),
+        ]);
+
+        if (!cancelled) {
+          setRecoveryProfile(profile);
+          setCheckins(history);
+        }
+      } catch (error) {
+        console.error(
+          'Failed to load recovery data:',
+          error
+        );
+
+        if (!cancelled) {
+          setRecoveryProfile(null);
+          setCheckins([]);
+        }
+      }
+    };
+
+    loadRecoveryData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDemoUserId]);
+
   const nextStep = async () => {
     // Validate required fields on step 1
     if (currentStep === 1) {
       const age = parseInt(formData.age as any);
+
       if (!formData.age || isNaN(age) || age < 10 || age > 100) {
         setStepError(t('survey.errors.invalidAge'));
         return;
       }
+
       if (!formData.gender) {
         setStepError(t('survey.errors.selectGender'));
         return;
       }
     }
+
     setStepError('');
+
     if (currentStep < 5) {
       setCurrentStep(prev => prev + 1);
-    } else {
-      setIsAnalyzing(true);
-      setIsCompleted(true);
-      try {
-        // Chạy song song: gọi API và bộ đếm giờ 3 giây (3000ms)
-        const [result] = await Promise.all([
-          analyzeSurveyData(formData, language),
-          new Promise(resolve => setTimeout(resolve, 3000))
+
+      return;
+    }
+
+    setIsAnalyzing(true);
+
+    try {
+      const todayIso = new Date()
+        .toISOString()
+        .slice(0, 10);
+
+      /*
+      * STEP 1:
+      * Survey → Check-in payload
+      */
+      const checkinPayload = mapFormDataToCheckinCreate(
+        formData,
+        activeDemoUserId,
+        todayIso
+      );
+
+      /*
+      * STEP 2:
+      * Save check-in → get latest recovery profile
+      */
+      await createCheckin(checkinPayload);
+
+      const [profile, updatedCheckins] =
+        await Promise.all([
+          getRecoveryProfile(activeDemoUserId),
+          getCheckins(activeDemoUserId),
         ]);
 
-        // Colors and display names are already mapped by geminiService.ts.
-        // No re-mapping needed here — just set the result directly.
-        setAiResult(result);
-        saveToHistory(result);
-        if (result.recovery_load_level === 'High') {
-          setShowEmergencyModal(true);
-        }
-      } catch (error) {
-        console.error("Error analyzing data:", error);
-      } finally {
-        setIsAnalyzing(false);
-      }
+      await new Promise(resolve =>
+        setTimeout(resolve, 3000)
+      );
+
+      /*
+      * STEP 3:
+      * Recovery profile → ViewModel
+      */
+      let viewModel = adaptRecoveryProfile(profile);
+
+      /*
+      * STEP 4:
+      * Survey → Activity plan
+      */
+      const activities =
+        buildActivitiesFromSurvey(formData);
+
+      /*
+      * STEP 5:
+      * Run backend scenario simulation
+      */
+      const simulationResult =
+        await createSimulation({
+          user_id: activeDemoUserId,
+
+          activities,
+
+          label: 'Daily recovery activity plan',
+        });
+
+      /*
+      * STEP 6:
+      * Merge simulation into recovery state
+      */
+      viewModel = mergeSimulationResult(
+        viewModel,
+        simulationResult
+      );
+
+      /*
+      * STEP 7:
+      * Convert backend ViewModel → existing UI type
+      */
+      const result =
+        viewModelToAIRecommendation(viewModel);
+
+      /*
+      * STEP 8:
+      * Update UI
+      */
+      setRecoveryProfile(profile);
+
+      setCheckins(updatedCheckins);
+
+      setAiResult(result);
+
+      setIsCompleted(true);
+
+      /*
+      * Safety / high concern
+      */
+    if (viewModel.safetyBlocked) {
+      setShowEmergencyModal(true);
+    }
+
+    } catch (error) {
+      console.error(
+        'Error analyzing data:',
+        error
+      );
+
+      setIsCompleted(false);
+
+      setStepError(
+        'Unable to analyze your recovery data. Please check that the backend is running and try again.'
+      );
+
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -1075,24 +1253,48 @@ const featureLabels: Record<string, Record<string, string>> = {
                 <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
               </div>
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q9')}</label>
-                <div className="flex gap-4">
+                <label className={questionLabelClass}>
+                  {t('questions.q9')}
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { val: 'yes', label: t('questions.yes') },
-                    { val: 'no', label: t('questions.no') }
-                  ].map(opt => (
-                    <button key={opt.val} onClick={() => handleInputChange('exercised_today', opt.val)} className={choiceButtonClass(formData.exercised_today === opt.val)}>{opt.label}</button>
-                  ))}
-                </div>
-              </div>
-              <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q10')}</label>
-                <div className="flex gap-4">
-                  {[
-                    { val: 'yes', label: t('questions.yes') },
-                    { val: 'no', label: t('questions.no') }
-                  ].map(opt => (
-                    <button key={opt.val} onClick={() => handleInputChange('symptoms_worsened_after_activity', opt.val)} className={choiceButtonClass(formData.symptoms_worsened_after_activity === opt.val)}>{opt.label}</button>
+                    {
+                      val: 'not_applicable',
+                      label: 'Not applicable',
+                    },
+                    {
+                      val: 'no',
+                      label: 'No',
+                    },
+                    {
+                      val: 'mild',
+                      label: 'Mild',
+                    },
+                    {
+                      val: 'moderate',
+                      label: 'Moderate',
+                    },
+                    {
+                      val: 'severe',
+                      label: 'Severe',
+                    },
+                  ].map((opt) => (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={() =>
+                        handleInputChange(
+                          'symptoms_worsened_after_activity',
+                          opt.val
+                        )
+                      }
+                      className={choiceButtonClass(
+                        formData.symptoms_worsened_after_activity === opt.val
+                      )}
+                    >
+                      {opt.label}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -1105,17 +1307,17 @@ const featureLabels: Record<string, Record<string, string>> = {
             <h2 className={`text-2xl font-extrabold mb-2 tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{t('questions.s4Title')}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q11')}</label>
+                <label className={questionLabelClass}>{t('questions.q10')}</label>
                 <CustomSlider min={0} max={5} step={1} value={formData.screen_time} onChange={(v) => handleInputChange('screen_time', v)} ariaLabel="Screen time" />
                 <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
               </div>
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q12')}</label>
+                <label className={questionLabelClass}>{t('questions.q11')}</label>
                 <CustomSlider min={0} max={5} step={1} value={formData.study_work_hours} onChange={(v) => handleInputChange('study_work_hours', v)} ariaLabel="Study or work hours" />
                 <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
               </div>
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q13')}</label>
+                <label className={questionLabelClass}>{t('questions.q12')}</label>
                 <CustomSlider min={0} max={5} step={1} value={formData.concentration_difficulty} onChange={(v) => handleInputChange('concentration_difficulty', v)} ariaLabel="Concentration difficulty" />
                 <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
               </div>
@@ -1124,254 +1326,582 @@ const featureLabels: Record<string, Record<string, string>> = {
         );
       case 5:
         return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-10">
-            <h2 className={`text-2xl font-extrabold mb-2 tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{t('questions.s5Title')}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-10"
+          >
+            <h2
+              className={`text-2xl font-extrabold mb-2 tracking-tight ${
+                isDarkMode ? 'text-white' : 'text-slate-900'
+              }`}
+            >
+              {t('questions.s5Title')}
+            </h2>
+
+            <div className="grid grid-cols-1 gap-8">
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q14')}</label>
-                <CustomSlider min={0} max={5} step={1} value={formData.mood} onChange={(v) => handleInputChange('mood', v)} ariaLabel="Mood today" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
-              </div>
-              <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q15')}</label>
-                <CustomSlider min={0} max={3} step={1} value={formData.social_support} onChange={(v) => handleInputChange('social_support', v)} ariaLabel="Social support" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>3</span></div>
-              </div>
-              <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q16')}</label>
-                <CustomSlider min={0} max={5} step={1} value={formData.overwhelm_level} onChange={(v) => handleInputChange('overwhelm_level', v)} ariaLabel="Stress or overwhelm level" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
+                <label className={questionLabelClass}>
+                  {t('questions.q13')}
+                </label>
+
+                <CustomSlider
+                  min={0}
+                  max={5}
+                  step={1}
+                  value={formData.mood}
+                  onChange={(v) => handleInputChange('mood', v)}
+                  ariaLabel="Mood today"
+                />
+
+                <div className={`flex justify-between ${textHintClass}`}>
+                  <span>0</span>
+                  <span>5</span>
+                </div>
               </div>
             </div>
           </motion.div>
         );
-      default:
-        return null;
+
     }
   };
 
-  const buildInsightCopy = (result: AIRecommendation) => {
-    const sorted = [...result.feature_importance].sort((a, b) => b.importance - a.importance);
-    const formatTop = (count: number) =>
-      sorted
-        .slice(0, count)
-        .map((item) => `${getFeatureLabel(item.feature)} (${Math.round(item.importance)}%)`)
-        .join(', ');
+  const buildInsightCopy = (result: AIRecommendation, profile: Awaited<ReturnType<typeof getRecoveryProfile>> | null) => {
+    const levelLabel = t(
+      `results.${result.recovery_load_level.toLowerCase()}`
+    );
 
-    const levelLabel = t(`results.${result.recovery_load_level.toLowerCase()}`);
-    const confidencePct = Math.round(result.confidence_score * 100);
-    const primary = getFeatureLabel(String(sorted[0]?.feature || ''));
-    const secondary = getFeatureLabel(String(sorted[1]?.feature || ''));
-
-    switch (language) {
-      case 'en':
-        return {
-          trends: `Current recovery load level: ${levelLabel} (confidence ${confidencePct}%). Top trends: ${formatTop(3)}.`,
-          touchpoints: `Strongest drivers: ${formatTop(2)}. Prioritize ${primary}${secondary ? ` and ${secondary}` : ''}.`
-        };
-      default:
-        return {
-          trends: `Mức tải hồi phục hiện tại: ${levelLabel} (độ chính xác ${confidencePct}%). Xu hướng chính: ${formatTop(3)}.`,
-          touchpoints: `Các yếu tố ảnh hưởng mạnh nhất: ${formatTop(2)}. Ưu tiên theo dõi ${primary}${secondary ? ` và ${secondary}` : ''}.`
-        };
+    if (!profile) {
+      return {
+        trends: language === 'vi'
+          ? `Mức đánh giá hiện tại: ${levelLabel}.`
+          : `Current assessment level: ${levelLabel}.`,
+        touchpoints: language === 'vi'
+          ? 'Chưa có đủ dữ liệu hồ sơ để hiển thị thêm chi tiết.'
+          : 'There is not enough profile data to show additional details.'
+      };
     }
+
+    const trend = profile.trend ?? 'insufficient_data';
+    const dataSufficiency = profile.data_sufficiency ?? 'insufficient';
+    const uncertainty = profile.uncertainty ?? 'high';
+
+    const trendText: Record<string, { en: string; vi: string }> = {
+      improving: {
+        en: 'Your recent self-reported symptom pattern is improving.',
+        vi: 'Xu hướng triệu chứng tự báo cáo gần đây của bạn đang cải thiện.'
+      },
+      worsening: {
+        en: 'Your recent self-reported symptom pattern is worsening.',
+        vi: 'Xu hướng triệu chứng tự báo cáo gần đây của bạn đang xấu đi.'
+      },
+      stable: {
+        en: 'Your recent self-reported symptom pattern is relatively stable.',
+        vi: 'Xu hướng triệu chứng tự báo cáo gần đây của bạn tương đối ổn định.'
+      },
+      insufficient_data: {
+        en: 'There is not enough recent data to identify a reliable trend.',
+        vi: 'Chưa có đủ dữ liệu gần đây để xác định một xu hướng đáng tin cậy.'
+      }
+    };
+
+    const sufficiencyText: Record<string, { en: string; vi: string }> = {
+      strong: {
+        en: 'The available recent data is strong.',
+        vi: 'Dữ liệu gần đây hiện có khá đầy đủ.'
+      },
+      moderate: {
+        en: 'The available recent data is moderate.',
+        vi: 'Dữ liệu gần đây hiện có ở mức vừa phải.'
+      },
+      insufficient: {
+        en: 'The available recent data is insufficient.',
+        vi: 'Dữ liệu gần đây hiện chưa đủ.'
+      }
+    };
+
+    const uncertaintyText: Record<string, { en: string; vi: string }> = {
+      low: {
+        en: 'Uncertainty is low.',
+        vi: 'Mức độ không chắc chắn thấp.'
+      },
+      moderate: {
+        en: 'Uncertainty is moderate.',
+        vi: 'Mức độ không chắc chắn ở mức vừa phải.'
+      },
+      high: {
+        en: 'Uncertainty is high.',
+        vi: 'Mức độ không chắc chắn cao.'
+      }
+    };
+
+    const lang = language === 'vi' ? 'vi' : 'en';
+
+    return {
+      trends: `${trendText[trend]?.[lang] ?? ''} ${
+        sufficiencyText[dataSufficiency]?.[lang] ?? ''
+      }`,
+
+      touchpoints: uncertaintyText[uncertainty]?.[lang] ?? ''
+    };
   };
 
   // ─── Dashboard Chart Data ───────────────────────────────────────────────
   const buildRadarData = () => {
-    // Normalize each dimension to 0–100 with safety checks.
-    // Dimensions: Symptoms, Sleep, Cognitive Load, Physical Activity, Mood.
-    // For "Symptoms", "Cognitive Load" the raw scores are severity (0=best),
-    // so we invert them — higher radar value always means "doing better".
     try {
+      const latestCheckin =
+        checkins.length > 0
+          ? [...checkins]
+              .sort((a, b) =>
+                b.checkin_date.localeCompare(a.checkin_date)
+              )[0]
+          : null;
+
       const safeNum = (val: any, def = 0) => {
-        const n = Number(val) || def;
-        return isNaN(n) ? def : n;
+        const n = Number(val);
+        return Number.isFinite(n) ? n : def;
       };
 
-      const hc = safeNum(formData.headache, 0);
-      const dz = safeNum(formData.dizziness, 0);
-      const bv = safeNum(formData.blurred_vision, 0);
-      const na = safeNum(formData.nausea, 0);
-      const sq = safeNum(formData.sleep_quality, 0);
-      const st = safeNum(formData.screen_time, 0);
-      const sw = safeNum(formData.study_work_hours, 0);
-      const cd = safeNum(formData.concentration_difficulty, 0);
-      const mo = safeNum(formData.mood, 0);
-      const worsened = formData.symptoms_worsened_after_activity === 'yes' ? 1 : 0;
+      const hc =
+        latestCheckin?.headache ??
+        safeNum(formData.headache, 0);
 
-      const avgSymptom = (hc + dz + bv + na) / 4;
-      const symptoms = Math.round(((5 - avgSymptom) / 5) * 100);
-      const sleep = Math.round((sq / 5) * 100);
-      const avgCognitive = (st + sw + cd) / 3;
-      const cognitiveLoad = Math.round(((5 - avgCognitive) / 5) * 100);
-      const physicalActivity = Math.round(((5 - worsened * 5) / 5) * 100);
-      const mood = Math.round((mo / 5) * 100);
+      const dz =
+        latestCheckin?.dizziness ??
+        safeNum(formData.dizziness, 0);
+
+      const bv =
+        latestCheckin?.blurred_vision ??
+        safeNum(formData.blurred_vision, 0);
+
+      const na =
+        latestCheckin?.nausea ??
+        safeNum(formData.nausea, 0);
+
+      const sq =
+        latestCheckin?.sleep_quality ??
+        safeNum(formData.sleep_quality, 0);
+
+      const cd =
+        latestCheckin?.concentration_difficulty ??
+        safeNum(formData.concentration_difficulty, 0);
+
+      const mo =
+        latestCheckin?.mood ??
+        safeNum(formData.mood, 0);
+
+      /*
+      * Backend stores real minutes.
+      * Convert back to the UI 0–5 exposure scale.
+      */
+      const st = latestCheckin
+        ? Math.min(
+            latestCheckin.screen_time_minutes / 120,
+            5
+          )
+        : safeNum(formData.screen_time, 0);
+
+      const sw = latestCheckin
+        ? Math.min(
+            latestCheckin.study_work_minutes / 120,
+            5
+          )
+        : safeNum(formData.study_work_hours, 0);
+
+      /*
+      * Symptoms
+      * Backend scale: 0 = best, 3 = worst.
+      * Radar: higher = better.
+      */
+      const avgSymptom =
+        (hc + dz + bv + na) / 4;
+
+      const symptoms = Math.round(
+        ((3 - avgSymptom) / 3) * 100
+      );
+
+      /*
+      * Sleep quality
+      * Backend scale: 0–3, higher = better.
+      */
+      const sleep = Math.round(
+        (safeNum(sq, 0) / 3) * 100
+      );
+
+      /*
+      * Cognitive status
+      *
+      * concentration_difficulty:
+      * 0 = best, 3 = worst
+      *
+      * screen/study:
+      * converted to UI scale 0–5,
+      * lower exposure = better.
+      */
+      const cognitiveDifficultyScore =
+        Math.round(
+          ((3 - cd) / 3) * 100
+        );
+
+      const screenScore =
+        Math.round(
+          ((5 - st) / 5) * 100
+        );
+
+      const studyScore =
+        Math.round(
+          ((5 - sw) / 5) * 100
+        );
+
+      const cognitiveLoad = Math.round(
+        (
+          cognitiveDifficultyScore +
+          screenScore +
+          studyScore
+        ) / 3
+      );
+
+      /*
+      * Physical activity status.
+      *
+      * Backend enum:
+      * not_applicable
+      * no
+      * mild
+      * moderate
+      * severe
+      */
+      const activityStatus =
+        latestCheckin?.symptoms_worsened_after_activity ??
+        formData.symptoms_worsened_after_activity;
+
+      const activityPenaltyMap: Record<
+        string,
+        number
+      > = {
+        not_applicable: 0,
+        no: 0,
+        mild: 1,
+        moderate: 2,
+        severe: 3,
+      };
+
+      const activityPenalty =
+        activityPenaltyMap[activityStatus] ?? 0;
+
+      const physicalActivity =
+        Math.round(
+          ((3 - activityPenalty) / 3) * 100
+        );
+
+      /*
+      * Mood backend scale: 0–3.
+      * Higher = better.
+      */
+      const mood = Math.round(
+        (safeNum(mo, 0) / 3) * 100
+      );
 
       const getRadarLabel = (cat: string) => {
         const radMap: any = {
-          en: { symptoms: "Symptoms", sleep: "Sleep", cognitiveLoad: "Cognitive Load", physicalActivity: "Physical Activity", mood: "Mood" },
-          vi: { symptoms: "Triệu chứng", sleep: "Giấc ngủ", cognitiveLoad: "Tải nhận thức", physicalActivity: "Vận động thể chất", mood: "Tâm trạng" },
+          en: {
+            symptoms: 'Symptoms',
+            sleep: 'Sleep',
+            cognitiveLoad: 'Cognitive Load',
+            physicalActivity: 'Activity Tolerance',
+            mood: 'Mood',
+          },
+
+          vi: {
+            symptoms: 'Triệu chứng',
+            sleep: 'Giấc ngủ',
+            cognitiveLoad: 'Tải nhận thức',
+            physicalActivity: 'Khả năng vận động',
+            mood: 'Tâm trạng',
+          },
         };
-        return radMap[language]?.[cat] || radMap.en[cat];
+
+        return (
+          radMap[language]?.[cat] ||
+          radMap.en[cat]
+        );
       };
 
+      const clamp = (value: number) =>
+        Math.min(
+          100,
+          Math.max(
+            0,
+            Number.isFinite(value)
+              ? value
+              : 50
+          )
+        );
+
       return [
-        { subject: getRadarLabel('symptoms'), value: Math.min(100, Math.max(5, isNaN(symptoms) ? 50 : symptoms)), fullMark: 100 },
-        { subject: getRadarLabel('sleep'), value: Math.min(100, Math.max(5, isNaN(sleep) ? 50 : sleep)), fullMark: 100 },
-        { subject: getRadarLabel('cognitiveLoad'), value: Math.min(100, Math.max(5, isNaN(cognitiveLoad) ? 50 : cognitiveLoad)), fullMark: 100 },
-        { subject: getRadarLabel('physicalActivity'), value: Math.min(100, Math.max(5, isNaN(physicalActivity) ? 50 : physicalActivity)), fullMark: 100 },
-        { subject: getRadarLabel('mood'), value: Math.min(100, Math.max(5, isNaN(mood) ? 50 : mood)), fullMark: 100 },
+        {
+          subject: getRadarLabel('symptoms'),
+          value: clamp(symptoms),
+          fullMark: 100,
+        },
+
+        {
+          subject: getRadarLabel('sleep'),
+          value: clamp(sleep),
+          fullMark: 100,
+        },
+
+        {
+          subject: getRadarLabel('cognitiveLoad'),
+          value: clamp(cognitiveLoad),
+          fullMark: 100,
+        },
+
+        {
+          subject: getRadarLabel('physicalActivity'),
+          value: clamp(physicalActivity),
+          fullMark: 100,
+        },
+
+        {
+          subject: getRadarLabel('mood'),
+          value: clamp(mood),
+          fullMark: 100,
+        },
       ];
     } catch (error) {
-      console.error('Error in buildRadarData:', error);
+      console.error(
+        'Error in buildRadarData:',
+        error
+      );
+
       return [
-        { subject: 'Symptoms', value: 50, fullMark: 100 },
-        { subject: 'Sleep', value: 50, fullMark: 100 },
-        { subject: 'Cognitive Load', value: 50, fullMark: 100 },
-        { subject: 'Physical Activity', value: 50, fullMark: 100 },
-        { subject: 'Mood', value: 50, fullMark: 100 },
+        {
+          subject: 'Symptoms',
+          value: 50,
+          fullMark: 100,
+        },
+        {
+          subject: 'Sleep',
+          value: 50,
+          fullMark: 100,
+        },
+        {
+          subject: 'Cognitive Load',
+          value: 50,
+          fullMark: 100,
+        },
+        {
+          subject: 'Activity Tolerance',
+          value: 50,
+          fullMark: 100,
+        },
+        {
+          subject: 'Mood',
+          value: 50,
+          fullMark: 100,
+        },
       ];
     }
+  };
+
+  const buildRecoveryTrendData = () => {
+    const calculateSymptomBurden = (
+      item: CheckinListItem
+    ) => {
+      const total =
+        item.headache +
+        item.dizziness +
+        item.blurred_vision +
+        item.nausea;
+
+      const maxTotal = 4 * 3;
+
+      return Math.round(
+        (total / maxTotal) * 100
+      );
+    };
+
+    if (!checkins || checkins.length === 0) {
+      return [];
+    }
+
+    const sorted = [...checkins]
+      .sort((a, b) =>
+        a.checkin_date.localeCompare(
+          b.checkin_date
+        )
+      );
+
+    if (stressTrendPeriod === 'weekly') {
+      return sorted
+        .slice(-7)
+        .map((item) => ({
+          label: new Date(
+            `${item.checkin_date}T00:00:00`
+          ).toLocaleDateString(
+            language === 'vi' ? 'vi-VN' : 'en-US',
+            {
+              weekday: 'short',
+            }
+          ),
+
+          symptomBurden:
+            calculateSymptomBurden(item),
+
+          date: item.checkin_date,
+        }));
+    }
+
+    const groups = new Map<
+      string,
+      number[]
+    >();
+
+    sorted.forEach((item) => {
+      const date = new Date(
+        `${item.checkin_date}T00:00:00`
+      );
+
+      const weekIndex =
+        `W${Math.floor(
+          (date.getDate() - 1) / 7
+        ) + 1}`;
+
+      const current =
+        groups.get(weekIndex) ?? [];
+
+      current.push(
+        calculateSymptomBurden(item)
+      );
+
+      groups.set(
+        weekIndex,
+        current
+      );
+    });
+
+    return Array.from(groups.entries())
+      .slice(-4)
+      .map(([label, values]) => ({
+        label,
+
+        symptomBurden:
+          Math.round(
+            values.reduce(
+              (sum, value) =>
+                sum + value,
+              0
+            ) / values.length
+          ),
+      }));
   };
 
   const buildStressTrendData = () => {
-    try {
-      const weekly = [
-        { label: 'Mon', stress: 45, avg: 52 },
-        { label: 'Tue', stress: 62, avg: 55 },
-        { label: 'Wed', stress: 38, avg: 50 },
-        { label: 'Thu', stress: 71, avg: 58 },
-        { label: 'Fri', stress: 55, avg: 53 },
-        { label: 'Sat', stress: 30, avg: 42 },
-        { label: 'Sun', stress: 25, avg: 38 },
-      ];
-      const monthly = [
-        { label: 'W1', stress: 48, avg: 50 },
-        { label: 'W2', stress: 65, avg: 54 },
-        { label: 'W3', stress: 42, avg: 51 },
-        { label: 'W4', stress: 58, avg: 55 },
-      ];
-      // Blend with actual session data if available
-      if (sessionHistory && sessionHistory.length > 0) {
-        const lastScore = Number(sessionHistory[sessionHistory.length - 1]?.stressScore ?? 50);
-        if (!isNaN(lastScore) && lastScore >= 0 && lastScore <= 100) {
-          if (stressTrendPeriod === 'weekly') {
-            weekly[weekly.length - 1].stress = lastScore;
-          } else {
-            monthly[monthly.length - 1].stress = lastScore;
-          }
-        }
-      }
-      return stressTrendPeriod === 'weekly' ? weekly : monthly;
-    } catch (error) {
-      console.error('Error in buildStressTrendData:', error);
-      return [
-        { label: 'Mon', stress: 50, avg: 50 },
-        { label: 'Tue', stress: 50, avg: 50 },
-        { label: 'Wed', stress: 50, avg: 50 },
-        { label: 'Thu', stress: 50, avg: 50 },
-        { label: 'Fri', stress: 50, avg: 50 },
-        { label: 'Sat', stress: 50, avg: 50 },
-        { label: 'Sun', stress: 50, avg: 50 },
-      ];
+    const history = [...checkins]
+      .sort(
+        (a, b) =>
+          new Date(a.checkin_date).getTime() -
+          new Date(b.checkin_date).getTime()
+      );
+
+    if (history.length === 0) {
+      return [];
     }
+
+    const calculateLoad = (session: CheckinListItem) => {
+      const symptomScore =
+        (
+          session.headache +
+          session.dizziness +
+          session.blurred_vision +
+          session.nausea
+        ) / 4;
+
+      const cognitiveScore =
+        (
+          session.concentration_difficulty +
+          Math.min(session.screen_time_minutes / 120, 3) +
+          Math.min(session.study_work_minutes / 120, 3)
+        ) / 3;
+
+      const sleepPenalty =
+        session.sleep_quality === null
+          ? 0
+          : 3 - session.sleep_quality;
+
+      return Math.round(
+        ((symptomScore + cognitiveScore + sleepPenalty) / 9) * 100
+      );
+    };
+
+    const selectedHistory =
+      stressTrendPeriod === 'weekly'
+        ? history.slice(-7)
+        : history.slice(-30);
+
+    return selectedHistory.map((session) => ({
+      label: formatSessionDate(session.checkin_date),
+      stress: calculateLoad(session),
+    }));
   };
 
   const buildCalendarData = () => {
-    try {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sun
-      // Stress levels: 0=none, 1=low, 2=medium, 3=high
-      const stressPattern = [1, 1, 2, 3, 2, 1, 1, 2, 3, 3, 2, 1, 1, 2, 3, 3, 2, 2, 1, 1, 2, 2, 2, 1, 1, 1, 2, 3, 3, 2, 1];
-      const currentStress = aiResult?.recovery_load_level === 'High' ? 3 : aiResult?.recovery_load_level === 'Medium' ? 2 : 1;
-      const dateNum = now.getDate();
-      if (dateNum >= 1 && dateNum <= stressPattern.length) {
-        stressPattern[dateNum - 1] = currentStress;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const daysInMonth = new Date(
+      year,
+      month + 1,
+      0
+    ).getDate();
+
+    const firstDayOfWeek =
+      new Date(year, month, 1).getDay();
+
+    const stressPattern = Array(daysInMonth).fill(0);
+
+    const calculateLevel = (
+      session: CheckinListItem
+    ) => {
+      const symptomAverage =
+        (
+          session.headache +
+          session.dizziness +
+          session.blurred_vision +
+          session.nausea
+        ) / 4;
+
+      if (symptomAverage >= 2) return 3;
+      if (symptomAverage >= 1) return 2;
+
+      return 1;
+    };
+
+    checkins.forEach((session) => {
+      const date = new Date(session.checkin_date);
+
+      if (
+        date.getFullYear() === year &&
+        date.getMonth() === month
+      ) {
+        stressPattern[date.getDate() - 1] =
+          calculateLevel(session);
       }
-      return { daysInMonth, firstDayOfWeek: firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1, stressPattern, month, year };
-    } catch (error) {
-      console.error('Error in buildCalendarData:', error);
-      const now = new Date();
-      return { 
-        daysInMonth: 30, 
-        firstDayOfWeek: 0, 
-        stressPattern: Array(31).fill(1), 
-        month: now.getMonth(), 
-        year: now.getFullYear() 
-      };
-    }
-  };
+    });
 
-  const buildPeerData = () => {
-    try {
-      const safeNum = (val: any, def = 0) => {
-        const n = Number(val) || def;
-        return isNaN(n) ? def : n;
-      };
-
-      const sq = safeNum(formData.sleep_quality, 0);
-      const hc = safeNum(formData.headache, 0);
-      const ss = safeNum(formData.social_support, 0);
-      const st = safeNum(formData.screen_time, 0);
-      const mo = safeNum(formData.mood, 0);
-
-      const peerData = [
-        {
-          label: getFeatureLabel('sleep_quality'),
-          you: Math.round((sq / 5) * 10),
-          avg: 7,
-          unit: 'hrs',
-          youPct: Math.min(100, Math.round((sq / 5) * 100)),
-          avgPct: 70,
-        },
-        {
-          label: getFeatureLabel('headache'),
-          you: hc,
-          avg: 2,
-          unit: '/5',
-          youPct: Math.min(100, Math.round((hc / 5) * 100)),
-          avgPct: 40,
-        },
-        {
-          label: getFeatureLabel('social_support'),
-          you: ss,
-          avg: 2,
-          unit: '/3',
-          youPct: Math.min(100, Math.round((ss / 3) * 100)),
-          avgPct: 65,
-        },
-        {
-          label: getFeatureLabel('screen_time'),
-          you: st,
-          avg: 3,
-          unit: '/5',
-          youPct: Math.min(100, Math.round((st / 5) * 100)),
-          avgPct: 60,
-        },
-        {
-          label: getFeatureLabel('mood'),
-          you: mo,
-          avg: 3,
-          unit: '/5',
-          youPct: Math.min(100, Math.round((mo / 5) * 100)),
-          avgPct: 60,
-        },
-      ];
-      return peerData;
-    } catch (error) {
-      console.error('Error in buildPeerData:', error);
-      return [
-        { label: 'Sleep', you: 0, avg: 7, unit: 'hrs', youPct: 0, avgPct: 70 },
-        { label: 'Headache', you: 0, avg: 2, unit: '/5', youPct: 0, avgPct: 40 },
-        { label: 'Social', you: 0, avg: 2, unit: '/3', youPct: 0, avgPct: 65 },
-        { label: 'Screen Time', you: 0, avg: 3, unit: '/5', youPct: 0, avgPct: 60 },
-        { label: 'Mood', you: 0, avg: 3, unit: '/5', youPct: 0, avgPct: 60 },
-      ];
-    }
+    return {
+      daysInMonth,
+      firstDayOfWeek:
+        firstDayOfWeek === 0
+          ? 6
+          : firstDayOfWeek - 1,
+      stressPattern,
+      month,
+      year,
+    };
   };
 
   // Custom Radar tooltip
@@ -1408,10 +1938,75 @@ const featureLabels: Record<string, Record<string, string>> = {
   };
 
   const renderDashboardView = () => {
+    const signal = (() => {
+      if (!recoveryProfile) {
+        return {
+          title: 'Loading recovery signal',
+          description: 'Retrieving recent recovery observations.',
+          trendLabel: 'Loading',
+          trendClass: isDarkMode
+            ? 'bg-slate-800/70 text-slate-300 border-slate-700'
+            : 'bg-slate-100 text-slate-600 border-slate-200',
+          Icon: Activity,
+        };
+      }
+
+      switch (recoveryProfile.trend) {
+        case 'improving':
+          return {
+            title: 'Recovery trend is improving',
+            description:
+              'Recent self-reported patterns are trending in a more favorable direction.',
+            trendLabel: 'Improving',
+            trendClass: isDarkMode
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            Icon: TrendingUp,
+          };
+
+        case 'stable':
+          return {
+            title: 'Recovery trend is stable',
+            description:
+              'Recent self-reported patterns are not showing a meaningful directional change.',
+            trendLabel: 'Stable',
+            trendClass: isDarkMode
+              ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+              : 'bg-blue-50 text-blue-700 border-blue-200',
+            Icon: Minus,
+          };
+
+        case 'worsening':
+          return {
+            title: 'Recovery trend needs attention',
+            description:
+              'Recent self-reported patterns show a worsening direction that may deserve closer monitoring.',
+            trendLabel: 'Needs attention',
+            trendClass: isDarkMode
+              ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+              : 'bg-rose-50 text-rose-700 border-rose-200',
+            Icon: TrendingDown,
+          };
+
+        case 'insufficient_data':
+        default:
+          return {
+            title: 'Not enough data to determine a trend',
+            description:
+              'More check-ins are needed before the system can describe a recent recovery pattern.',
+            trendLabel: 'Insufficient data',
+            trendClass: isDarkMode
+              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+              : 'bg-amber-50 text-amber-700 border-amber-200',
+            Icon: Database,
+          };
+      }
+    })();
+
+    const SignalIcon = signal.Icon;
     const radarData = buildRadarData();
-    const trendData = buildStressTrendData();
+    const trendData = buildRecoveryTrendData();
     const calendar = buildCalendarData();
-    const peerData = buildPeerData();
     const localeMap: Record<string, string> = { vi: 'vi-VN', en: 'en-US' };
     const monthName = new Date(calendar.year, calendar.month).toLocaleString(localeMap[language], { month: 'long', year: 'numeric' });
     const dayLabels = [t('ui.calendar.mon'), t('ui.calendar.tue'), t('ui.calendar.wed'), t('ui.calendar.thu'), t('ui.calendar.fri'), t('ui.calendar.sat'), t('ui.calendar.sun')];
@@ -1442,16 +2037,222 @@ const featureLabels: Record<string, Record<string, string>> = {
           </div>
         </div>
 
+        {/* Recovery Signal */}
+        <motion.div
+          key={`${activeDemoUserId}-${recoveryProfile?.trend ?? 'loading'}`}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+          className={`analytics-glass-card mb-6 overflow-hidden rounded-[2rem] border p-5 md:p-6 ${
+            isDarkMode
+              ? 'border-white/10 bg-slate-900/50'
+              : 'border-white/60 bg-white/70'
+          }`}
+        >
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            {/* Left */}
+            <div className="flex items-start gap-4">
+              <div
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${
+                  signal.trendClass
+                }`}
+              >
+                <SignalIcon className="h-6 w-6" />
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center gap-2">
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-[0.2em] ${
+                      isDarkMode ? 'text-slate-400' : 'text-slate-500'
+                    }`}
+                  >
+                    Recovery Signal
+                  </span>
+
+                  {recoveryProfile && (
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${signal.trendClass}`}
+                    >
+                      {signal.trendLabel}
+                    </span>
+                  )}
+                </div>
+
+                <h3
+                  className={`text-lg font-extrabold md:text-xl ${
+                    isDarkMode ? 'text-white' : 'text-slate-900'
+                  }`}
+                  style={{
+                    fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif",
+                  }}
+                >
+                  {signal.title}
+                </h3>
+
+                <p
+                  className={`mt-1 max-w-2xl text-sm leading-relaxed ${
+                    isDarkMode ? 'text-slate-400' : 'text-slate-500'
+                  }`}
+                  style={{
+                    fontFamily: "'Manrope', 'Inter', sans-serif",
+                  }}
+                >
+                  {signal.description}
+                </p>
+              </div>
+            </div>
+
+            {/* Right: metadata */}
+            {recoveryProfile && (
+              <div className="grid grid-cols-3 gap-3 md:min-w-[330px]">
+                <div
+                  className={`rounded-2xl border px-3 py-3 text-center ${
+                    isDarkMode
+                      ? 'border-white/10 bg-white/5'
+                      : 'border-slate-100 bg-white/60'
+                  }`}
+                >
+                  <div
+                    className={`text-[9px] font-bold uppercase tracking-wider ${
+                      isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                    }`}
+                  >
+                    Check-ins
+                  </div>
+
+                  <div
+                    className={`mt-1 text-lg font-extrabold ${
+                      isDarkMode ? 'text-white' : 'text-slate-800'
+                    }`}
+                  >
+                    {recoveryProfile.checkin_count_in_window}
+                  </div>
+
+                  <div
+                    className={`text-[9px] ${
+                      isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                    }`}
+                  >
+                    {recoveryProfile.window_days} days
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-2xl border px-3 py-3 text-center ${
+                    isDarkMode
+                      ? 'border-white/10 bg-white/5'
+                      : 'border-slate-100 bg-white/60'
+                  }`}
+                >
+                  <div
+                    className={`text-[9px] font-bold uppercase tracking-wider ${
+                      isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                    }`}
+                  >
+                    Data
+                  </div>
+
+                  <div
+                    className={`mt-1 text-sm font-extrabold capitalize ${
+                      isDarkMode ? 'text-white' : 'text-slate-800'
+                    }`}
+                  >
+                    {recoveryProfile.data_sufficiency}
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-2xl border px-3 py-3 text-center ${
+                    isDarkMode
+                      ? 'border-white/10 bg-white/5'
+                      : 'border-slate-100 bg-white/60'
+                  }`}
+                >
+                  <div
+                    className={`text-[9px] font-bold uppercase tracking-wider ${
+                      isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                    }`}
+                  >
+                    Uncertainty
+                  </div>
+
+                  <div
+                    className={`mt-1 text-sm font-extrabold capitalize ${
+                      isDarkMode ? 'text-white' : 'text-slate-800'
+                    }`}
+                  >
+                    {recoveryProfile.uncertainty}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Observed pattern */}
+          {recoveryProfile &&
+            recoveryProfile.observed_patterns.length > 0 && (
+              <div
+                className={`mt-5 border-t pt-4 ${
+                  isDarkMode ? 'border-white/10' : 'border-slate-100'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <Activity
+                    className={`mt-0.5 h-4 w-4 shrink-0 ${
+                      isDarkMode ? 'text-teal-300' : 'text-teal-600'
+                    }`}
+                  />
+
+                  <div>
+                    <p
+                      className={`text-xs font-bold ${
+                        isDarkMode ? 'text-slate-200' : 'text-slate-700'
+                      }`}
+                    >
+                      Observed pattern
+                    </p>
+
+                    <p
+                      className={`mt-1 text-xs leading-relaxed ${
+                        isDarkMode ? 'text-slate-400' : 'text-slate-500'
+                      }`}
+                    >
+                      {recoveryProfile.observed_patterns[0].description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {/* Safety note */}
+          <p
+            className={`mt-4 text-[10px] leading-relaxed ${
+              isDarkMode ? 'text-slate-500' : 'text-slate-400'
+            }`}
+          >
+            Trend labels describe recent self-reported patterns and are not a
+            medical recovery status.
+          </p>
+        </motion.div>
+
         {/* Row 1: Radar Chart + Summary Stats */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" style={{ minHeight: '400px' }}>
           {/* Radar Chart */}
           <div className={`lg:col-span-7 analytics-glass-card rounded-[2rem] p-6 md:p-8 shadow-sm ${isDarkMode ? 'dark' : ''}`} style={{ minHeight: '400px' }}>
             <div className="flex items-start justify-between mb-2">
               <div>
-                <h3 className={`text-xl font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}
-                  style={{ fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif" }}>{t('ui.dashboard.lifeBalance')}</h3>
-                <p className={`text-sm mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
-                  style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{t('ui.dashboard.lifeBalanceDesc')}</p>
+                <h3 className={`text-xl font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`} style={{fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif"}}>
+                  Recovery Overview
+                </h3>
+
+                <p className={`text-sm mt-0.5 ${ isDarkMode ? 'text-slate-400' : 'text-slate-500' }`}
+                  style={{
+                    fontFamily: "'Manrope', 'Inter', sans-serif"
+                  }}
+                >
+                  Your current recovery status based on the latest check-in.
+                </p>
               </div>
               <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${isDarkMode ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30' : 'bg-teal-100 text-teal-700 border border-teal-200'
                 }`} style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{t('ui.live')}</span>
@@ -1607,28 +2408,20 @@ const featureLabels: Record<string, Record<string, string>> = {
                   <Tooltip content={<AreaTooltip />} />
                   <Area
                     type="monotone"
-                    dataKey="avg"
-                    name={t('ui.campusAvg')}
-                    stroke="#6e3bd8"
-                    strokeWidth={2}
-                    strokeDasharray="5 3"
-                    fill="url(#avgGrad)"
-                    dot={false}
+                    dataKey="symptomBurden"
+                    name="Reported symptom burden"
+                    stroke="#006b60"
+                    strokeWidth={2.5}
+                    fill="url(#stressGrad)"
+                    dot={{
+                      r: 3,
+                      strokeWidth: 2,
+                    }}
+                    activeDot={{
+                      r: 5,
+                    }}
                     isAnimationActive={true}
                     animationDuration={1200}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="stress"
-                    name={t('ui.yourStress')}
-                    stroke="#006b60"
-                    strokeWidth={3}
-                    fill="url(#stressGrad)"
-                    strokeLinecap="round"
-                    dot={{ fill: '#006b60', r: 4, strokeWidth: 2.5, stroke: isDarkMode ? '#0f172a' : '#fff' }}
-                    activeDot={{ r: 6, strokeWidth: 0, fill: '#006b60' }}
-                    isAnimationActive={true}
-                    animationDuration={1400}
                   />
                   <Legend
                     iconType="circle"
@@ -1700,77 +2493,14 @@ const featureLabels: Record<string, Record<string, string>> = {
             </div>
           </div>
         </div>
-
-        {/* Row 3: Peer Comparison Horizontal Bar Chart */}
-        <div className={`analytics-glass-card rounded-[2rem] p-6 md:p-8 shadow-sm ${isDarkMode ? 'dark' : ''}`} style={{ minHeight: '300px' }}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-            <div>
-              <h3 className={`text-xl font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}
-                style={{ fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif" }}>{t('ui.dashboard.peerComparison')}</h3>
-              <p className={`text-sm mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
-                style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{t('ui.dashboard.peerComparisonDesc')}</p>
-            </div>
-            <div className="flex gap-6">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-2.5 rounded-full" style={{ background: 'linear-gradient(90deg, #006b60, #48e5d0)' }} />
-                <span className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
-                  style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{t('ui.you')}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-2.5 rounded-full" style={{ backgroundColor: isDarkMode ? '#334155' : '#ddcdff' }} />
-                <span className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
-                  style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{t('ui.campusAvg')}</span>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-7">
-            {peerData.map((item, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}
-                    style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{item.label}</span>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${item.youPct >= item.avgPct
-                      ? (isDarkMode ? 'bg-teal-500/15 text-teal-300' : 'bg-teal-600/10 text-teal-700')
-                      : (isDarkMode ? 'bg-purple-500/15 text-purple-300' : 'bg-purple-50 text-purple-700')
-                      }`} style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>
-                      You: {item.you}{item.unit}
-                    </span>
-                    <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}
-                      style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>vs Avg: {item.avg}{item.unit}</span>
-                  </div>
-                </div>
-                {/* Avg bar (background) */}
-                <div className="relative h-5 w-full rounded-full overflow-hidden" style={{ background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' }}>
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full transition-all duration-1000 ease-out"
-                    style={{ width: `${item.avgPct}%`, background: isDarkMode ? '#334155' : '#ddcdff' }}
-                  />
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full transition-all duration-1200 ease-out"
-                    style={{
-                      width: `${item.youPct}%`,
-                      background: 'linear-gradient(90deg, #006b60, #48e5d0)',
-                      boxShadow: '4px 0 12px rgba(0,107,96,0.35)'
-                    }}
-                  />
-                  {/* Value label inside bar */}
-                  {item.youPct > 15 && (
-                    <span className="absolute inset-y-0 flex items-center text-[10px] font-black text-white/90 px-2"
-                      style={{ left: `${Math.min(item.youPct - 8, 85)}%`, fontFamily: "'Manrope', 'Inter', sans-serif" }}>
-                      {item.youPct}%
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     );
   };
 
-  const insightCopy = aiResult ? buildInsightCopy(aiResult) : null;
+  const insightCopy =
+    aiResult
+      ? buildInsightCopy(aiResult, recoveryProfile)
+      : null;
   const insightMeta = aiResult
     ? {
       levelLabel: aiResult.recovery_load_level === 'Low' ? 'Low' : aiResult.recovery_load_level === 'Medium' ? 'Medium' : 'High',
@@ -2496,7 +3226,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                   </div>
 
                   {/* Foreground Content */}
-                  <div className="relative z-10 w-full max-w-2xl text-left">
+                  <div className="relative z-10 w-full max-w-xl text-left">
                     {/* Badge */}
                     <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
                       className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold tracking-widest mb-8 bg-white/40 border border-white/60 text-slate-700 shadow-sm backdrop-blur-xl uppercase"
@@ -2507,7 +3237,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                     {/* Headline */}
                     <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.1 }}
                       className="font-extrabold tracking-tight leading-[1.1] mb-6 text-slate-900"
-                      style={{ fontSize: 'clamp(2.5rem, 5.5vw, 4.5rem)' }}
+                      style={{ fontSize: 'clamp(2.25rem, 4.5vw, 3.75rem)' }}
                     >
                       {t('hero.title1')}<br />
                       <span className="text-[#0f172a]">{t('hero.title2')}</span>
@@ -2515,7 +3245,7 @@ const featureLabels: Record<string, Record<string, string>> = {
 
                     {/* Subtitle — highly blurred frosted glass card */}
                     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.2 }}
-                      className="bg-white/20 backdrop-blur-3xl border border-white/60 rounded-3xl p-6 sm:p-8 mb-10 shadow-[0_8px_32px_rgba(255,255,255,0.3)] max-w-xl relative overflow-hidden"
+                      className="bg-white/20 backdrop-blur-3xl border border-white/60 rounded-3xl p-5 sm:p-6 mb-8 shadow-[0_8px_32px_rgba(255,255,255,0.3)] max-w-lg relative overflow-hidden"
                     >
                       <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-white/10" />
                       <p className="relative z-10 text-base sm:text-lg leading-relaxed text-slate-800 font-medium">
@@ -2612,10 +3342,14 @@ const featureLabels: Record<string, Record<string, string>> = {
             key="survey"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.4 }}
-            className={`container mx-auto px-6 min-h-[100dvh] flex flex-col w-full ${isCompleted ? 'items-stretch justify-start pt-24 pb-12 max-w-[1360px]' : 'items-center justify-center py-24 max-w-3xl'}`}
+            className={`container mx-auto px-4 sm:px-6 min-h-[100dvh] flex flex-col w-full ${
+              isCompleted
+                ? 'items-stretch justify-start pt-20 pb-10 max-w-[1360px]'
+                : 'items-center justify-center py-12 max-w-2xl'
+            }`}
           >
             {!isCompleted ? (
-              <div className={`relative rounded-[2rem] overflow-visible p-8 md:p-12 border shadow-[0_8px_32px_0_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] ${isDarkMode ? 'bg-slate-900/80 border-white/10' : 'bg-white/20 backdrop-blur-3xl border-white/40'}`}>
+              <div className={`relative rounded-[2rem] overflow-visible p-6 md:p-8 border shadow-[0_8px_32px_0_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] ${isDarkMode ? 'bg-slate-900/80 border-white/10' : 'bg-white/20 backdrop-blur-3xl border-white/40'}`}>
                 
                 {/* Progress Bar */}
                 <div className="mb-12">
@@ -2773,7 +3507,49 @@ const featureLabels: Record<string, Record<string, string>> = {
                       {/* Existing Medical Report content... */}
                       <div className={`relative rounded-[2.5rem] p-6 md:p-8 xl:p-10 shadow-[0_24px_90px_rgba(45,51,55,0.06)] ${isDarkMode ? 'bg-slate-900/40 border border-white/10' : 'bg-white/95 border border-slate-100'}`}>
                           {/* Existing Header and Charts code... */}
-                          <div className="pl-8">{renderDashboardView()}</div>
+                          <div className="pl-8">
+                            {/* Demo Persona Switcher */}
+                            <div className="mb-6 flex items-center justify-between">
+                              <div>
+                                <p
+                                  className={`text-sm ${
+                                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                                  }`}
+                                >
+                                  Demo Persona
+                                </p>
+
+                                <h2
+                                  className={`text-xl font-semibold ${
+                                    isDarkMode ? 'text-white' : 'text-gray-900'
+                                  }`}
+                                >
+                                  Recovery Scenario
+                                </h2>
+                              </div>
+
+                              <select
+                                value={activeDemoUserId}
+                                onChange={(e) => setActiveDemoUserId(e.target.value as DemoPersonaId)}
+                                className={`rounded-xl border px-4 py-2 text-sm font-medium shadow-sm outline-none transition ${
+                                  isDarkMode
+                                    ? 'border-gray-700 bg-gray-900 text-white focus:border-blue-400'
+                                    : 'border-gray-200 bg-white text-gray-900 focus:border-blue-500'
+                                }`}
+                              >
+                                {DEMO_PERSONAS.map((persona) => (
+                                  <option
+                                    key={persona.id}
+                                    value={persona.id}
+                                  >
+                                    {persona.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {renderDashboardView()}
+                          </div>
                       </div>
                     </div>
                     </div> {/* Fix: Changed </motion.div> to </div> to match opening tag at line 1179 */}
@@ -2936,7 +3712,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                                   })()}
                                 </div>
                               </div>
-                              {sessionHistory?.length > 0 && (
+                              {checkins?.length > 0 && (
                                 <section className="mt-8 space-y-5">
                                   <div className="flex items-end justify-between gap-4">
                                     <div>
@@ -2945,27 +3721,66 @@ const featureLabels: Record<string, Record<string, string>> = {
                                     </div>
                                     <button className={`${isDarkMode ? 'text-teal-300' : 'text-teal-700'} text-sm font-semibold flex items-center gap-1 hover:underline`} style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{t('ui.viewFullLog')} <ArrowRight className="w-3.5 h-3.5" /></button>
                                   </div>
-                                  <div className={`p-5 rounded-[2rem] border ${isDarkMode ? 'bg-slate-900/60 border-white/10' : 'bg-white/25 backdrop-blur-3xl border-white/40'}`}>
+                                  <div className={`p-5 rounded-[2rem] border ${isDarkMode ? 'bg-slate-900/60 border-white/10' : 'bg-white/25 backdrop-blur-3xl border-white/40'}`}>                                    
                                     <div className="space-y-3">
-                                      {sessionHistory?.slice(0, 5).map((session, idx) => {
-                                        const score = session.level === 'High' ? '8.1' : session.level === 'Medium' ? '6.2' : '4.8';
+                                      {checkins?.slice(0, 5).map((session) => {
+                                        const symptomAverage =
+                                          (
+                                            session.headache +
+                                            session.dizziness +
+                                            session.blurred_vision +
+                                            session.nausea
+                                          ) / 4;
+
+                                        const symptomPercent = Math.round(
+                                          (symptomAverage / 3) * 100
+                                        );
+
                                         return (
-                                          <div key={`history-${session.date}-${idx}`}
-                                            className={`analytics-glass-card rounded-2xl p-4 flex items-center gap-6 border border-white/40 group hover:bg-white/60 transition-colors ${isDarkMode ? 'dark' : ''}`}>
-                                            <div className={`w-24 text-xs font-bold shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{formatSessionDate(session.date)}</div>
-                                            <div className="flex-1">
-                                              {session?.features && (
-                                                <div className="flex h-3 rounded-full overflow-hidden bg-slate-100">
-                                                  {session.features?.map((f: any, fi: number) => {
-                                                    const ftotal = session.features?.reduce((s: number, x: any) => s + x.importance, 0) || 0;
-                                                    const fpct = ftotal > 0 ? (f.importance / ftotal) * 100 : 0;
-                                                    const fcolor = (!f.color || f.color === '#f3f4f6') ? ['#006b60', '#6e3bd8', '#a53173', '#48e5d0'][fi % 4] : f.color;
-                                                    return <div key={fi} style={{ width: `${fpct}%`, backgroundColor: fcolor }} className="h-full" />;
-                                                  })}
-                                                </div>
-                                              )}
+                                          <div
+                                            key={session.checkin_id}
+                                            className={`analytics-glass-card rounded-2xl p-4 flex items-center gap-6 border border-white/40 group hover:bg-white/60 transition-colors ${
+                                              isDarkMode ? 'dark' : ''
+                                            }`}
+                                          >
+                                            <div
+                                              className={`w-24 text-xs font-bold shrink-0 ${
+                                                isDarkMode
+                                                  ? 'text-slate-400'
+                                                  : 'text-slate-500'
+                                              }`}
+                                              style={{
+                                                fontFamily:
+                                                  "'Manrope', 'Inter', sans-serif"
+                                              }}
+                                            >
+                                              {formatSessionDate(session.checkin_date)}
                                             </div>
-                                            <div className={`w-10 text-right text-xs font-black ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{score}</div>
+
+                                            <div className="flex-1">
+                                              <div className="h-3 rounded-full overflow-hidden bg-slate-100">
+                                                <div
+                                                  className="h-full bg-[#006b60] transition-all"
+                                                  style={{
+                                                    width: `${symptomPercent}%`
+                                                  }}
+                                                />
+                                              </div>
+                                            </div>
+
+                                            <div
+                                              className={`w-10 text-right text-xs font-black ${
+                                                isDarkMode
+                                                  ? 'text-slate-200'
+                                                  : 'text-slate-800'
+                                              }`}
+                                              style={{
+                                                fontFamily:
+                                                  "'Manrope', 'Inter', sans-serif"
+                                              }}
+                                            >
+                                              {symptomPercent}%
+                                            </div>
                                           </div>
                                         );
                                       })}

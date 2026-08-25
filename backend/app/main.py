@@ -7,8 +7,10 @@ from app.api.routes.recovery import router as recovery_router
 from app.api.routes.checkins import router as checkins_router
 from app.api.routes.scenario import router as scenario_router
 from app.api.routes.safety import router as safety_router
+from app.api.routes.simulation import router as simulation_router
 
 from app.services.checkin_validation import CheckinValidationError
+from app.scenario_engine.activity_catalog import UnknownActivityError
 
 app = FastAPI(
     title="RE:ENTRY - Concussion Recovery API",
@@ -70,10 +72,31 @@ async def checkin_validation_error_handler(
     )
 
 
+@app.exception_handler(UnknownActivityError)
+async def unknown_activity_error_handler(
+    request: Request,
+    exc: UnknownActivityError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "status": "error",
+            "error_type": "validation_error",
+            "details": [
+                {
+                    "field": f"activities[{exc.index}].activity_id",
+                    "issue": f"Unknown activity_id: '{exc.activity_id}'",
+                }
+            ],
+        },
+    )
+
+
 app.include_router(checkins_router)
 app.include_router(scenario_router)
 app.include_router(recovery_router)
 app.include_router(safety_router)
+app.include_router(simulation_router)
 
 
 @app.get("/health")

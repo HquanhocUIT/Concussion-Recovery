@@ -26,16 +26,22 @@ export interface FormData {
   age: string;
   gender: string;
   days_since_injury: string;
+
   headache: number;
   dizziness: number;
   blurred_vision: number;
   nausea: number;
+
   sleep_quality: number;
+
   exercised_today: 'yes' | 'no';
+
   symptoms_worsened_after_activity: 'yes' | 'no';
+
   screen_time: number;
   study_work_hours: number;
   concentration_difficulty: number;
+
   mood: number;
   social_support: number;
   overwhelm_level: number;
