@@ -35,6 +35,9 @@ import {
   Facebook,
   LayoutDashboard,
   TrendingUp,
+  TrendingDown,
+  Minus,
+  Database,
   Calendar,
   GitCompare,
   X,
@@ -46,9 +49,30 @@ import {
   Legend
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  SCREEN_SCORE_TO_MINUTES,
+  DEFAULT_LIGHT_EXERCISE_MINUTES,
+  DEFAULT_REST_MINUTES,
+} from './config/recoveryConstants';
 import { Player } from '@lottiefiles/react-lottie-player';
-import { analyzeSurveyData } from './services/geminiService';
-import type { AIRecommendation } from './types';
+import {
+  createCheckin,
+  getRecoveryProfile,
+  createSimulation,
+} from './services/api';
+import { mapFormDataToCheckinCreate } from './services/checkinMapper';
+import type { ActivityInput } from './services/api';
+import {
+  adaptRecoveryProfile,
+  mergeSimulationResult,
+  viewModelToAIRecommendation,
+} from './services/recoveryAdapter';
+import {
+  DEMO_PERSONAS,
+  DEFAULT_DEMO_PERSONA_ID,
+  type DemoPersonaId,
+} from './config/demoPersona';
+import type { AIRecommendation, FormData } from './types';
 import { translations } from './translations';
 
 
@@ -188,11 +212,51 @@ const LiquidButton = ({ children, onClick, variant = 'primary', className = "", 
   );
 };
 
+const buildActivitiesFromSurvey = (
+  formData: FormData
+): ActivityInput[] => {
+  const activities: ActivityInput[] = [];
+
+  const screenScore = Number(formData.screen_time ?? 0);
+
+  if (screenScore > 0) {
+    activities.push({
+      activity_id: 'phone_social_media',
+      duration_minutes: screenScore * SCREEN_SCORE_TO_MINUTES,
+    });
+  }
+
+  const studyHours = Number(formData.study_work_hours ?? 0);
+
+  if (studyHours > 0) {
+    activities.push({
+      activity_id: 'studying',
+      duration_minutes: Math.round(studyHours * 60),
+    });
+  }
+
+  if (formData.exercised_today === 'yes') {
+    activities.push({
+      activity_id: 'light_exercise',
+      duration_minutes: DEFAULT_LIGHT_EXERCISE_MINUTES,
+    });
+  }
+
+  activities.push({
+    activity_id: 'rest',
+    duration_minutes: DEFAULT_REST_MINUTES,
+  });
+
+  return activities;
+};
+
 
 export default function App() {
   const [hasConsented, setHasConsented] = useState(false);
   const [showMotivational, setShowMotivational] = useState(false);
   const [language, setLanguage] = useState<'vi' | 'en'>(() => (localStorage.getItem('concussionrecovery_language') as any) || 'en');
+  const [activeDemoUserId, setActiveDemoUserId] = useState<DemoPersonaId>(DEFAULT_DEMO_PERSONA_ID);
+  const [recoveryProfile, setRecoveryProfile] = useState<Awaited<ReturnType<typeof getRecoveryProfile>> | null>(null);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [isSurveyOpen, setIsSurveyOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -438,44 +502,175 @@ const featureLabels: Record<string, Record<string, string>> = {
     });
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRecoveryProfile = async () => {
+      try {
+        const profile = await getRecoveryProfile(
+          activeDemoUserId
+        );
+
+        if (!cancelled) {
+          setRecoveryProfile(profile);
+        }
+
+      } catch (error) {
+        console.error(
+          'Failed to load recovery profile:',
+          error
+        );
+
+        if (!cancelled) {
+          setRecoveryProfile(null);
+        }
+      }
+    };
+
+    loadRecoveryProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDemoUserId]);
+
   const nextStep = async () => {
     // Validate required fields on step 1
     if (currentStep === 1) {
       const age = parseInt(formData.age as any);
+
       if (!formData.age || isNaN(age) || age < 10 || age > 100) {
         setStepError(t('survey.errors.invalidAge'));
         return;
       }
+
       if (!formData.gender) {
         setStepError(t('survey.errors.selectGender'));
         return;
       }
     }
+
     setStepError('');
+
     if (currentStep < 5) {
       setCurrentStep(prev => prev + 1);
-    } else {
-      setIsAnalyzing(true);
-      setIsCompleted(true);
-      try {
-        // Chạy song song: gọi API và bộ đếm giờ 3 giây (3000ms)
-        const [result] = await Promise.all([
-          analyzeSurveyData(formData, language),
-          new Promise(resolve => setTimeout(resolve, 3000))
-        ]);
 
-        // Colors and display names are already mapped by geminiService.ts.
-        // No re-mapping needed here — just set the result directly.
-        setAiResult(result);
-        saveToHistory(result);
-        if (result.recovery_load_level === 'High') {
-          setShowEmergencyModal(true);
-        }
-      } catch (error) {
-        console.error("Error analyzing data:", error);
-      } finally {
-        setIsAnalyzing(false);
+      return;
+    }
+
+    setIsAnalyzing(true);
+
+    try {
+      const todayIso = new Date()
+        .toISOString()
+        .slice(0, 10);
+
+      /*
+      * STEP 1:
+      * Survey → Check-in payload
+      */
+      const checkinPayload = mapFormDataToCheckinCreate(
+        formData,
+        activeDemoUserId,
+        todayIso
+      );
+
+      /*
+      * STEP 2:
+      * Save check-in → get latest recovery profile
+      */
+      const [profile] = await Promise.all([
+        (async () => {
+          await createCheckin(checkinPayload);
+
+          return getRecoveryProfile(
+            activeDemoUserId
+          );
+        })(),
+
+        // Keep analyzing animation visible
+        new Promise(resolve =>
+          setTimeout(resolve, 3000)
+        ),
+      ]);
+
+      /*
+      * STEP 3:
+      * Recovery profile → ViewModel
+      */
+      let viewModel = adaptRecoveryProfile(profile);
+
+      /*
+      * STEP 4:
+      * Survey → Activity plan
+      */
+      const activities =
+        buildActivitiesFromSurvey(formData);
+
+      /*
+      * STEP 5:
+      * Run backend scenario simulation
+      */
+      const simulationResult =
+        await createSimulation({
+          user_id: activeDemoUserId,
+
+          activities,
+
+          label: 'Daily recovery activity plan',
+        });
+
+      /*
+      * STEP 6:
+      * Merge simulation into recovery state
+      */
+      viewModel = mergeSimulationResult(
+        viewModel,
+        simulationResult
+      );
+
+      /*
+      * STEP 7:
+      * Convert backend ViewModel → existing UI type
+      */
+      const result =
+        viewModelToAIRecommendation(viewModel);
+
+      /*
+      * STEP 8:
+      * Update UI
+      */
+      setRecoveryProfile(profile);
+
+      setAiResult(result);
+
+      saveToHistory(result);
+
+      setIsCompleted(true);
+
+      /*
+      * Safety / high concern
+      */
+      if (
+        result.recovery_load_level === 'High'
+      ) {
+        setShowEmergencyModal(true);
       }
+
+    } catch (error) {
+      console.error(
+        'Error analyzing data:',
+        error
+      );
+
+      setIsCompleted(false);
+
+      setStepError(
+        'Unable to analyze your recovery data. Please check that the backend is running and try again.'
+      );
+
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -1408,6 +1603,72 @@ const featureLabels: Record<string, Record<string, string>> = {
   };
 
   const renderDashboardView = () => {
+    const signal = (() => {
+      if (!recoveryProfile) {
+        return {
+          title: 'Loading recovery signal',
+          description: 'Retrieving recent recovery observations.',
+          trendLabel: 'Loading',
+          trendClass: isDarkMode
+            ? 'bg-slate-800/70 text-slate-300 border-slate-700'
+            : 'bg-slate-100 text-slate-600 border-slate-200',
+          Icon: Activity,
+        };
+      }
+
+      switch (recoveryProfile.trend) {
+        case 'improving':
+          return {
+            title: 'Recovery trend is improving',
+            description:
+              'Recent self-reported patterns are trending in a more favorable direction.',
+            trendLabel: 'Improving',
+            trendClass: isDarkMode
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            Icon: TrendingUp,
+          };
+
+        case 'stable':
+          return {
+            title: 'Recovery trend is stable',
+            description:
+              'Recent self-reported patterns are not showing a meaningful directional change.',
+            trendLabel: 'Stable',
+            trendClass: isDarkMode
+              ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+              : 'bg-blue-50 text-blue-700 border-blue-200',
+            Icon: Minus,
+          };
+
+        case 'worsening':
+          return {
+            title: 'Recovery trend needs attention',
+            description:
+              'Recent self-reported patterns show a worsening direction that may deserve closer monitoring.',
+            trendLabel: 'Needs attention',
+            trendClass: isDarkMode
+              ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+              : 'bg-rose-50 text-rose-700 border-rose-200',
+            Icon: TrendingDown,
+          };
+
+        case 'insufficient_data':
+        default:
+          return {
+            title: 'Not enough data to determine a trend',
+            description:
+              'More check-ins are needed before the system can describe a recent recovery pattern.',
+            trendLabel: 'Insufficient data',
+            trendClass: isDarkMode
+              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+              : 'bg-amber-50 text-amber-700 border-amber-200',
+            Icon: Database,
+          };
+      }
+    })();
+
+    const SignalIcon = signal.Icon;
     const radarData = buildRadarData();
     const trendData = buildStressTrendData();
     const calendar = buildCalendarData();
@@ -1441,6 +1702,205 @@ const featureLabels: Record<string, Record<string, string>> = {
             <Activity className="w-4 h-4" /> {t('ui.dashboard.period')}
           </div>
         </div>
+
+        {/* Recovery Signal */}
+        <motion.div
+          key={`${activeDemoUserId}-${recoveryProfile?.trend ?? 'loading'}`}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+          className={`analytics-glass-card mb-6 overflow-hidden rounded-[2rem] border p-5 md:p-6 ${
+            isDarkMode
+              ? 'border-white/10 bg-slate-900/50'
+              : 'border-white/60 bg-white/70'
+          }`}
+        >
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            {/* Left */}
+            <div className="flex items-start gap-4">
+              <div
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${
+                  signal.trendClass
+                }`}
+              >
+                <SignalIcon className="h-6 w-6" />
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center gap-2">
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-[0.2em] ${
+                      isDarkMode ? 'text-slate-400' : 'text-slate-500'
+                    }`}
+                  >
+                    Recovery Signal
+                  </span>
+
+                  {recoveryProfile && (
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${signal.trendClass}`}
+                    >
+                      {signal.trendLabel}
+                    </span>
+                  )}
+                </div>
+
+                <h3
+                  className={`text-lg font-extrabold md:text-xl ${
+                    isDarkMode ? 'text-white' : 'text-slate-900'
+                  }`}
+                  style={{
+                    fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif",
+                  }}
+                >
+                  {signal.title}
+                </h3>
+
+                <p
+                  className={`mt-1 max-w-2xl text-sm leading-relaxed ${
+                    isDarkMode ? 'text-slate-400' : 'text-slate-500'
+                  }`}
+                  style={{
+                    fontFamily: "'Manrope', 'Inter', sans-serif",
+                  }}
+                >
+                  {signal.description}
+                </p>
+              </div>
+            </div>
+
+            {/* Right: metadata */}
+            {recoveryProfile && (
+              <div className="grid grid-cols-3 gap-3 md:min-w-[330px]">
+                <div
+                  className={`rounded-2xl border px-3 py-3 text-center ${
+                    isDarkMode
+                      ? 'border-white/10 bg-white/5'
+                      : 'border-slate-100 bg-white/60'
+                  }`}
+                >
+                  <div
+                    className={`text-[9px] font-bold uppercase tracking-wider ${
+                      isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                    }`}
+                  >
+                    Check-ins
+                  </div>
+
+                  <div
+                    className={`mt-1 text-lg font-extrabold ${
+                      isDarkMode ? 'text-white' : 'text-slate-800'
+                    }`}
+                  >
+                    {recoveryProfile.checkin_count_in_window}
+                  </div>
+
+                  <div
+                    className={`text-[9px] ${
+                      isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                    }`}
+                  >
+                    {recoveryProfile.window_days} days
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-2xl border px-3 py-3 text-center ${
+                    isDarkMode
+                      ? 'border-white/10 bg-white/5'
+                      : 'border-slate-100 bg-white/60'
+                  }`}
+                >
+                  <div
+                    className={`text-[9px] font-bold uppercase tracking-wider ${
+                      isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                    }`}
+                  >
+                    Data
+                  </div>
+
+                  <div
+                    className={`mt-1 text-sm font-extrabold capitalize ${
+                      isDarkMode ? 'text-white' : 'text-slate-800'
+                    }`}
+                  >
+                    {recoveryProfile.data_sufficiency}
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-2xl border px-3 py-3 text-center ${
+                    isDarkMode
+                      ? 'border-white/10 bg-white/5'
+                      : 'border-slate-100 bg-white/60'
+                  }`}
+                >
+                  <div
+                    className={`text-[9px] font-bold uppercase tracking-wider ${
+                      isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                    }`}
+                  >
+                    Uncertainty
+                  </div>
+
+                  <div
+                    className={`mt-1 text-sm font-extrabold capitalize ${
+                      isDarkMode ? 'text-white' : 'text-slate-800'
+                    }`}
+                  >
+                    {recoveryProfile.uncertainty}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Observed pattern */}
+          {recoveryProfile &&
+            recoveryProfile.observed_patterns.length > 0 && (
+              <div
+                className={`mt-5 border-t pt-4 ${
+                  isDarkMode ? 'border-white/10' : 'border-slate-100'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <Activity
+                    className={`mt-0.5 h-4 w-4 shrink-0 ${
+                      isDarkMode ? 'text-teal-300' : 'text-teal-600'
+                    }`}
+                  />
+
+                  <div>
+                    <p
+                      className={`text-xs font-bold ${
+                        isDarkMode ? 'text-slate-200' : 'text-slate-700'
+                      }`}
+                    >
+                      Observed pattern
+                    </p>
+
+                    <p
+                      className={`mt-1 text-xs leading-relaxed ${
+                        isDarkMode ? 'text-slate-400' : 'text-slate-500'
+                      }`}
+                    >
+                      {recoveryProfile.observed_patterns[0].description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {/* Safety note */}
+          <p
+            className={`mt-4 text-[10px] leading-relaxed ${
+              isDarkMode ? 'text-slate-500' : 'text-slate-400'
+            }`}
+          >
+            Trend labels describe recent self-reported patterns and are not a
+            medical recovery status.
+          </p>
+        </motion.div>
 
         {/* Row 1: Radar Chart + Summary Stats */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" style={{ minHeight: '400px' }}>
@@ -2773,7 +3233,49 @@ const featureLabels: Record<string, Record<string, string>> = {
                       {/* Existing Medical Report content... */}
                       <div className={`relative rounded-[2.5rem] p-6 md:p-8 xl:p-10 shadow-[0_24px_90px_rgba(45,51,55,0.06)] ${isDarkMode ? 'bg-slate-900/40 border border-white/10' : 'bg-white/95 border border-slate-100'}`}>
                           {/* Existing Header and Charts code... */}
-                          <div className="pl-8">{renderDashboardView()}</div>
+                          <div className="pl-8">
+                            {/* Demo Persona Switcher */}
+                            <div className="mb-6 flex items-center justify-between">
+                              <div>
+                                <p
+                                  className={`text-sm ${
+                                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                                  }`}
+                                >
+                                  Demo Persona
+                                </p>
+
+                                <h2
+                                  className={`text-xl font-semibold ${
+                                    isDarkMode ? 'text-white' : 'text-gray-900'
+                                  }`}
+                                >
+                                  Recovery Scenario
+                                </h2>
+                              </div>
+
+                              <select
+                                value={activeDemoUserId}
+                                onChange={(e) => setActiveDemoUserId(e.target.value as DemoPersonaId)}
+                                className={`rounded-xl border px-4 py-2 text-sm font-medium shadow-sm outline-none transition ${
+                                  isDarkMode
+                                    ? 'border-gray-700 bg-gray-900 text-white focus:border-blue-400'
+                                    : 'border-gray-200 bg-white text-gray-900 focus:border-blue-500'
+                                }`}
+                              >
+                                {DEMO_PERSONAS.map((persona) => (
+                                  <option
+                                    key={persona.id}
+                                    value={persona.id}
+                                  >
+                                    {persona.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {renderDashboardView()}
+                          </div>
                       </div>
                     </div>
                     </div> {/* Fix: Changed </motion.div> to </div> to match opening tag at line 1179 */}

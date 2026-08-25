@@ -40,6 +40,10 @@ npm-debug.log*
 build/
 .cache/
 
-
 # Local SQLite databases
 *.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
