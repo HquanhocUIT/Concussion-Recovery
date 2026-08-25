@@ -39,3 +39,7 @@ npm-debug.log*
 *.pkl
 build/
 .cache/
+
+
+# Local SQLite databases
+*.db
