@@ -4,6 +4,16 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+MainConcern = Literal[
+    "high_cognitive_demand",
+    "high_physical_demand",
+    "high_screen_exposure",
+    "no_declared_recovery_activity_in_plan",
+    "long_continuous_block",
+    "insufficient_data",
+]
+
+
 class ActivityInput(BaseModel):
     activity_id: str
     duration_minutes: int = Field(gt=0)
@@ -11,7 +21,7 @@ class ActivityInput(BaseModel):
 
 class SimulationRequest(BaseModel):
     user_id: str
-    activities: list[ActivityInput]
+    activities: list[ActivityInput] = Field(min_length=1)
     label: str
 
 
@@ -79,7 +89,7 @@ class ScenarioResult(BaseModel):
 
     modeled_overload: bool
 
-    main_concerns: list[str]
+    main_concerns: list[MainConcern]
 
     explanation_factors: list[ExplanationFactor]
 
