@@ -93,20 +93,17 @@ export const translations: Record<string, any> = {
 
       s3Title: "Step 3: Physical",
       q8: "8. Sleep quality last night (0 = Worst, 5 = Best)?",
-      q9: "9. Did you exercise or do physical activity today?",
-      q10: "10. Did your symptoms get worse after activity today?",
+      q9: "9. Did your symptoms get worse after activity today?",
       yes: "Yes",
       no: "No",
 
       s4Title: "Step 4: Cognitive Load",
-      q11: "11. Screen time today (0 = None, 5 = Very heavy)?",
-      q12: "12. Study or work hours today (0 = None, 5 = Very heavy)?",
-      q13: "13. Difficulty reading or concentrating today (0 = None, 5 = Severe)?",
+      q10: "10. Screen time today (0 = None, 5 = Very heavy)?",
+      q11: "11. Study or work hours today (0 = None, 5 = Very heavy)?",
+      q12: "12. Difficulty reading or concentrating today (0 = None, 5 = Severe)?",
 
       s5Title: "Step 5: Mood & Recovery Context",
-      q14: "14. How would you rate your mood today (0 = Very low, 5 = Great)?",
-      q15: "15. Social support available to you (0 = None, 3 = A lot)?",
-      q16: "16. Stress or overwhelm level today (0 = None, 5 = Extreme)?"
+      q13: "13. How would you rate your mood today (0 = Very low, 5 = Great)?",
     },
     // Results & Emergency
     results: {
@@ -355,8 +352,8 @@ export const translations: Record<string, any> = {
         title: "Recovery Dashboard",
         subtitle: "Your concussion recovery story, visualized through the lens of data.",
         period: "April 2026",
-        lifeBalance: "Recovery Balance",
-        lifeBalanceDesc: "Based on today's check-in responses",
+        lifeBalance: "Recovery Overview",
+        lifeBalanceDesc: "Your current recovery status based on your latest check-in.",
         stressTrend: "Recovery Load Trend",
         stressTrendDesc: "Your Recovery Load over time vs. a typical recovery pace",
         moodCalendar: "Symptom Calendar",
@@ -489,20 +486,17 @@ export const translations: Record<string, any> = {
 
       s3Title: "Bước 3: Thể chất",
       q8: "8. Chất lượng giấc ngủ đêm qua (0 = Tệ nhất, 5 = Tốt nhất)?",
-      q9: "9. Hôm nay bạn có tập thể dục hoặc vận động thể chất không?",
-      q10: "10. Triệu chứng của bạn có nặng hơn sau khi vận động hôm nay không?",
+      q9: "9. Triệu chứng của bạn có nặng hơn sau khi vận động hôm nay không?",
       yes: "Có",
       no: "Không",
 
       s4Title: "Bước 4: Tải nhận thức",
-      q11: "11. Thời gian dùng màn hình hôm nay (0 = Không, 5 = Rất nhiều)?",
-      q12: "12. Số giờ học tập/làm việc hôm nay (0 = Không, 5 = Rất nhiều)?",
-      q13: "13. Mức độ khó đọc hoặc tập trung hôm nay (0 = Không, 5 = Nặng)?",
+      q10: "10. Thời gian dùng màn hình hôm nay (0 = Không, 5 = Rất nhiều)?",
+      q11: "11. Số giờ học tập/làm việc hôm nay (0 = Không, 5 = Rất nhiều)?",
+      q12: "12. Mức độ khó đọc hoặc tập trung hôm nay (0 = Không, 5 = Nặng)?",
 
       s5Title: "Bước 5: Tâm trạng & Bối cảnh phục hồi",
-      q14: "14. Bạn đánh giá tâm trạng hôm nay thế nào (0 = Rất tệ, 5 = Rất tốt)?",
-      q15: "15. Mức độ hỗ trợ xã hội bạn có (0 = Không có, 3 = Rất nhiều)?",
-      q16: "16. Mức độ căng thẳng/quá tải hôm nay (0 = Không, 5 = Cực độ)?"
+      q13: "13. Bạn đánh giá tâm trạng hôm nay thế nào (0 = Rất tệ, 5 = Rất tốt)?",
     },
     // Results & Emergency
     results: {
@@ -751,8 +745,8 @@ export const translations: Record<string, any> = {
         title: "Bảng điều khiển Phục hồi",
         subtitle: "Câu chuyện phục hồi chấn động não của bạn qua góc nhìn dữ liệu.",
         period: "Tháng 04 năm 2026",
-        lifeBalance: "Cân bằng Phục hồi",
-        lifeBalanceDesc: "Dựa trên phản hồi check-in hôm nay",
+        lifeBalance: "Tổng quan hồi phục",
+        lifeBalanceDesc: "Tình trạng hồi phục hiện tại dựa trên lần check-in gần nhất.",
         stressTrend: "Xu hướng Mức Tải Phục Hồi",
         stressTrendDesc: "Mức Tải Phục Hồi theo thời gian so với nhịp độ phục hồi điển hình",
         moodCalendar: "Lịch triệu chứng",
