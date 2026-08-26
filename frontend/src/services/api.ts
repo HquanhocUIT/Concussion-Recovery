@@ -111,6 +111,22 @@ export interface ScenarioResult {
   limitations: string[];
 }
 
+export interface SimulationHistoryItem {
+  simulation_id: string;
+  user_id: string;
+  label: string;
+  created_at: string;
+  result: ScenarioResult;
+}
+
+export async function getSimulationHistory(
+  userId: string
+): Promise<SimulationHistoryItem[]> {
+  return request<SimulationHistoryItem[]>(
+    `/simulations/history/${userId}`
+  );
+}
+
 // SafetyResult — returned by POST /simulations instead of ScenarioResult
 // when the (currently placeholder) safety gate blocks execution.
 export interface SafetyResult {
@@ -227,4 +243,12 @@ export function createSimulation(payload: SimulationRequest): Promise<ScenarioRe
 
 export function isSafetyResult(result: ScenarioResult | SafetyResult): result is SafetyResult {
   return "safety_state" in result;
+}
+
+export interface SimulationHistoryItem {
+  simulation_id: string;
+  user_id: string;
+  label: string;
+  created_at: string;
+  result: ScenarioResult;
 }
