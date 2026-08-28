@@ -20,18 +20,23 @@ export type SymptomsWorsenedAfterActivity = "not_applicable" | "no" | "mild" | "
 
 export interface CheckinCreate {
   user_id: string;
-  checkin_date: string; // YYYY-MM-DD
-  headache: number; // 0-3
-  dizziness: number; // 0-3
-  blurred_vision: number; // 0-3
-  nausea: number; // 0-3
-  concentration_difficulty: number; // 0-3
-  sleep_hours?: number | null; // 0-24
-  sleep_quality?: number | null; // 0-3
-  screen_time_minutes: number; // >=0
-  study_work_minutes: number; // >=0
+  checkin_date: string;
+
+  headache: number;
+  dizziness: number;
+  blurred_vision: number;
+  nausea: number;
+  concentration_difficulty: number;
+
+  sleep_hours: number | null;
+  sleep_quality: number | null;
+
+  screen_time_minutes: number;
+  study_work_minutes: number;
+
   symptoms_worsened_after_activity: SymptomsWorsenedAfterActivity;
-  mood?: number | null; // 0-3, display-only on the backend
+
+  mood: number | null;
 }
 
 export interface CheckinResponse {
@@ -218,8 +223,40 @@ export function createCheckin(payload: CheckinCreate): Promise<CheckinResponse> 
 }
 
 /** GET /check-ins?user_id=... — list a user's check-ins, most recent first. */
-export function getCheckins(userId: string): Promise<unknown[]> {
-  return request<unknown[]>(`/check-ins?user_id=${encodeURIComponent(userId)}`);
+export function getCheckins(userId: string): Promise<CheckinListItem[]> {
+  return request<CheckinListItem[]>(
+    `/check-ins?user_id=${encodeURIComponent(userId)}`
+  );
+}
+
+export interface CheckinListItem {
+  checkin_id: string;
+  user_id: string;
+  checkin_date: string;
+
+  headache: number;
+  dizziness: number;
+  blurred_vision: number;
+  nausea: number;
+  concentration_difficulty: number;
+
+  sleep_hours: number | null;
+  sleep_quality: number | null;
+
+  screen_time_minutes: number;
+  study_work_minutes: number;
+
+  symptoms_worsened_after_activity:
+    | "not_applicable"
+    | "no"
+    | "mild"
+    | "moderate"
+    | "severe";
+
+  mood: number | null;
+
+  created_at: string;
+  updated_at: string | null;
 }
 
 /** GET /recovery/profile/{user_id} */
