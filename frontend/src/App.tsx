@@ -59,8 +59,10 @@ import {
   getCheckins,
   getRecoveryProfile,
   createSimulation,
-  ActivityInput,
-  CheckinListItem,
+  getSimulationHistory,
+  type SimulationHistoryItem,
+  type ActivityInput,
+  type CheckinListItem,
 } from './services/api';
 import { mapFormDataToCheckinCreate } from './services/checkinMapper';
 import {
@@ -247,6 +249,10 @@ const buildActivitiesFromSurvey = (
 
 export default function App() {
   const [hasConsented, setHasConsented] = useState(false);
+  const [
+    simulationHistory,
+    setSimulationHistory
+  ] = useState<SimulationHistoryItem[]>([]);
   const [showMotivational, setShowMotivational] = useState(false);
   const [language, setLanguage] = useState<'vi' | 'en'>(() => (localStorage.getItem('concussionrecovery_language') as any) || 'en');
   const [activeDemoUserId, setActiveDemoUserId] = useState<DemoPersonaId>(DEFAULT_DEMO_PERSONA_ID);
@@ -629,6 +635,11 @@ export default function App() {
 
       setCheckins(updatedCheckins);
 
+      const history = await getSimulationHistory(
+        activeDemoUserId
+      );
+
+      setSimulationHistory(history);
       setAiResult(result);
 
       setIsCompleted(true);
@@ -1827,7 +1838,7 @@ export default function App() {
         ) / 3;
 
       const sleepPenalty =
-        session.sleep_quality === null
+        session.sleep_quality == null
           ? 0
           : 3 - session.sleep_quality;
 

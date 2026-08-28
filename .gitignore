@@ -39,7 +39,6 @@ npm-debug.log*
 *.pkl
 build/
 .cache/
-*.db
 
-# Generated RAG index (rebuild with: cd rag; python main.py ingest)
-rag/data/processed/chroma/
+# Local SQLite databases
+*.db

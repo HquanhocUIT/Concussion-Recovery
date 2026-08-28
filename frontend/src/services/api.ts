@@ -20,23 +20,41 @@ export type SymptomsWorsenedAfterActivity = "not_applicable" | "no" | "mild" | "
 
 export interface CheckinCreate {
   user_id: string;
+  checkin_date: string; // YYYY-MM-DD
+  headache: number; // 0-3
+  dizziness: number; // 0-3
+  blurred_vision: number; // 0-3
+  nausea: number; // 0-3
+  concentration_difficulty: number; // 0-3
+  sleep_hours?: number | null; // 0-24
+  sleep_quality?: number | null; // 0-3
+  screen_time_minutes: number; // >=0
+  study_work_minutes: number; // >=0
+  symptoms_worsened_after_activity: SymptomsWorsenedAfterActivity;
+  mood?: number | null; // 0-3, display-only on the backend
+}
+
+export interface CheckinListItem {
+  checkin_id: string;
+  user_id: string;
   checkin_date: string;
 
   headache: number;
   dizziness: number;
   blurred_vision: number;
   nausea: number;
+
   concentration_difficulty: number;
 
-  sleep_hours: number | null;
-  sleep_quality: number | null;
+  sleep_hours?: number | null;
+  sleep_quality?: number | null;
 
   screen_time_minutes: number;
   study_work_minutes: number;
 
   symptoms_worsened_after_activity: SymptomsWorsenedAfterActivity;
 
-  mood: number | null;
+  mood?: number | null;
 }
 
 export interface CheckinResponse {
@@ -114,6 +132,22 @@ export interface ScenarioResult {
   uncertainty: Uncertainty;
   data_sufficiency: DataSufficiency;
   limitations: string[];
+}
+
+export interface SimulationHistoryItem {
+  simulation_id: string;
+  user_id: string;
+  label: string;
+  created_at: string;
+  result: ScenarioResult;
+}
+
+export async function getSimulationHistory(
+  userId: string
+): Promise<SimulationHistoryItem[]> {
+  return request<SimulationHistoryItem[]>(
+    `/simulations/history/${userId}`
+  );
 }
 
 // SafetyResult — returned by POST /simulations instead of ScenarioResult
@@ -207,40 +241,10 @@ export function createCheckin(payload: CheckinCreate): Promise<CheckinResponse> 
 }
 
 /** GET /check-ins?user_id=... — list a user's check-ins, most recent first. */
-export function getCheckins(userId: string): Promise<CheckinListItem[]> {
-  return request<CheckinListItem[]>(
-    `/check-ins?user_id=${encodeURIComponent(userId)}`
-  );
-}
-
-export interface CheckinListItem {
-  checkin_id: string;
-  user_id: string;
-  checkin_date: string;
-
-  headache: number;
-  dizziness: number;
-  blurred_vision: number;
-  nausea: number;
-  concentration_difficulty: number;
-
-  sleep_hours: number | null;
-  sleep_quality: number | null;
-
-  screen_time_minutes: number;
-  study_work_minutes: number;
-
-  symptoms_worsened_after_activity:
-    | "not_applicable"
-    | "no"
-    | "mild"
-    | "moderate"
-    | "severe";
-
-  mood: number | null;
-
-  created_at: string;
-  updated_at: string | null;
+export function getCheckins(
+  userId: string
+): Promise<CheckinListItem[]> {
+  return request<CheckinListItem[]>(`/checkins/${userId}`);
 }
 
 /** GET /recovery/profile/{user_id} */
@@ -264,4 +268,12 @@ export function createSimulation(payload: SimulationRequest): Promise<ScenarioRe
 
 export function isSafetyResult(result: ScenarioResult | SafetyResult): result is SafetyResult {
   return "safety_state" in result;
+}
+
+export interface SimulationHistoryItem {
+  simulation_id: string;
+  user_id: string;
+  label: string;
+  created_at: string;
+  result: ScenarioResult;
 }
