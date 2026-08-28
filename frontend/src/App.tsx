@@ -61,9 +61,8 @@ import {
   createSimulation,
   getSimulationHistory,
   type SimulationHistoryItem,
-} from "./services/api";
-  ActivityInput,
-  CheckinListItem,
+  type ActivityInput,
+  type CheckinListItem,
 } from './services/api';
 import { mapFormDataToCheckinCreate } from './services/checkinMapper';
 import {
@@ -1839,7 +1838,7 @@ export default function App() {
         ) / 3;
 
       const sleepPenalty =
-        session.sleep_quality === null
+        session.sleep_quality == null
           ? 0
           : 3 - session.sleep_quality;
 

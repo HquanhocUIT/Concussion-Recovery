@@ -34,6 +34,29 @@ export interface CheckinCreate {
   mood?: number | null; // 0-3, display-only on the backend
 }
 
+export interface CheckinListItem {
+  checkin_id: string;
+  user_id: string;
+  checkin_date: string;
+
+  headache: number;
+  dizziness: number;
+  blurred_vision: number;
+  nausea: number;
+
+  concentration_difficulty: number;
+
+  sleep_hours?: number | null;
+  sleep_quality?: number | null;
+
+  screen_time_minutes: number;
+  study_work_minutes: number;
+
+  symptoms_worsened_after_activity: SymptomsWorsenedAfterActivity;
+
+  mood?: number | null;
+}
+
 export interface CheckinResponse {
   checkin_id: string;
   status: "created" | "updated";
@@ -218,8 +241,10 @@ export function createCheckin(payload: CheckinCreate): Promise<CheckinResponse> 
 }
 
 /** GET /check-ins?user_id=... — list a user's check-ins, most recent first. */
-export function getCheckins(userId: string): Promise<unknown[]> {
-  return request<unknown[]>(`/check-ins?user_id=${encodeURIComponent(userId)}`);
+export function getCheckins(
+  userId: string
+): Promise<CheckinListItem[]> {
+  return request<CheckinListItem[]>(`/checkins/${userId}`);
 }
 
 /** GET /recovery/profile/{user_id} */
