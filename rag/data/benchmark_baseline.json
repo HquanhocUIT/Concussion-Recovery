@@ -1,0 +1,19 @@
+{
+  "created_at": "2026-08-15",
+  "corpus_sources": 3,
+  "indexed_pages": 410,
+  "indexed_chunks": 2980,
+  "benchmark_cases": 12,
+  "candidate_k": 20,
+  "top_k": 5,
+  "audience_filter": "hard_chroma_metadata_filter",
+  "reranker": "hybrid_keyword_semantic_cross_encoder",
+  "cross_encoder": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "recall_at_5": 1.0,
+  "mrr": 0.8194,
+  "limitations": [
+    "This is a small engineering benchmark, not clinical validation.",
+    "Cases are curated from the same three documents used by the corpus.",
+    "The benchmark must be expanded with independent, adversarial, and multilingual cases."
+  ]
+}
