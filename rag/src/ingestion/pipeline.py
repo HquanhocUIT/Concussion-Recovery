@@ -7,6 +7,8 @@ import yaml
 from src.chunking.chunker import chunk_pages
 from src.embeddings.embedder import MiniLMEmbedder
 from src.ingestion.loader import DEFAULT_CORPUS_DIR, DEFAULT_MANIFEST, load_corpus
+from src.retrieval.retriever import EvidenceRetriever
+from src.retrieval.reranker import CrossEncoderReranker
 from src.vectordb.vector_store import ChromaVectorStore
 
 
@@ -22,6 +24,21 @@ def build_store(config_path: Path = RAG_ROOT / "config.yaml") -> tuple[ChromaVec
     embedder = MiniLMEmbedder(config["embedding"]["model"])
     persist_dir = RAG_ROOT / config["vectordb"]["persist_directory"]
     return ChromaVectorStore(embedder, persist_dir), config
+
+
+def build_retriever(config_path: Path = RAG_ROOT / "config.yaml") -> EvidenceRetriever:
+    store, config = build_store(config_path)
+    retrieval = config["retrieval"]
+    cross_encoder = retrieval.get("cross_encoder", {})
+    reranker = CrossEncoderReranker(
+        cross_encoder.get("model", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+        enabled=cross_encoder.get("enabled", True),
+    )
+    return EvidenceRetriever(
+        store,
+        candidate_k=retrieval.get("candidate_k", 20),
+        reranker=reranker,
+    )
 
 
 def ingest(

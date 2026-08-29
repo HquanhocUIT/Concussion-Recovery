@@ -39,6 +39,7 @@ npm-debug.log*
 *.pkl
 build/
 .cache/
+rag/data/processed/chroma/
 
 # Local SQLite databases
 *.db

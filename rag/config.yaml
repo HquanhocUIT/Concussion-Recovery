@@ -11,6 +11,11 @@ chunking:
 
 retrieval:
   top_k: 5
+  candidate_k: 20
+  reranker: hybrid_keyword_semantic_cross_encoder
+  cross_encoder:
+    enabled: true
+    model: cross-encoder/ms-marco-MiniLM-L-6-v2
 
 llm:
   provider: anthropic

@@ -32,6 +32,10 @@ export interface FormData {
   blurred_vision: number;
   nausea: number;
 
+  worsening_headache: boolean;
+  repeated_vomiting: boolean;
+  neurological_danger_sign: boolean;
+
   sleep_quality: number;
 
   exercised_today: 'yes' | 'no';
