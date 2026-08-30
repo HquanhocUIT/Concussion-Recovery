@@ -1,0 +1,14 @@
+[
+  {"id":"screen-pediatric","query":"screen time after concussion in a child","audience":"pediatric","expected_source_ids":["pedsconcussion-living-guideline"],"required_any_terms":["screen","devices"]},
+  {"id":"return-school","query":"how should a child return to school after concussion","audience":"pediatric","expected_source_ids":["pedsconcussion-living-guideline"],"required_any_terms":["school","return-to-school"]},
+  {"id":"pediatric-rest","query":"how long should a child rest after concussion","audience":"pediatric","expected_source_ids":["pedsconcussion-living-guideline"],"required_any_terms":["24-48","rest"]},
+  {"id":"pediatric-exercise","query":"when can a child start light physical activity","audience":"pediatric","expected_source_ids":["pedsconcussion-living-guideline"],"required_any_terms":["physical activity","exercise"]},
+  {"id":"adult-return-work","query":"return to work after adult concussion","audience":"adult","expected_source_ids":["living-concussion-guidelines-adults-3e"],"required_any_terms":["work","return-to-work"]},
+  {"id":"adult-sleep","query":"sleep problems after concussion in adults","audience":"adult","expected_source_ids":["living-concussion-guidelines-adults-3e"],"required_any_terms":["sleep","insomnia"]},
+  {"id":"adult-headache","query":"management of persistent headache after adult concussion","audience":"adult","expected_source_ids":["living-concussion-guidelines-adults-3e"],"required_any_terms":["headache","post-traumatic"]},
+  {"id":"adult-activity","query":"gradual return to activity after adult concussion","audience":"adult","expected_source_ids":["living-concussion-guidelines-adults-3e"],"required_any_terms":["gradual","activity"]},
+  {"id":"sport-return","query":"graduated return to sport strategy","audience":"sport","expected_source_ids":["amsterdam-2022-consensus"],"required_any_terms":["return-to-sport","rts"]},
+  {"id":"sport-relative-rest","query":"relative rest during first 48 hours sport concussion","audience":"sport","expected_source_ids":["amsterdam-2022-consensus"],"required_any_terms":["relative rest","24–48"]},
+  {"id":"sport-persisting","query":"persisting symptoms longer than four weeks sport concussion","audience":"sport","expected_source_ids":["amsterdam-2022-consensus"],"required_any_terms":["persisting symptoms","4 weeks"]},
+  {"id":"sport-retirement","query":"retirement decision after repeated sport concussion","audience":"sport","expected_source_ids":["amsterdam-2022-consensus"],"required_any_terms":["retire","retirement"]}
+]

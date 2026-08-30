@@ -62,6 +62,20 @@ import {
   getSimulationHistory,
   type SimulationHistoryItem,
 } from "./services/api";
+  checkSafety,
+  getCheckins,
+  getRecoveryProfile,
+  createSimulation,
+  createRecommendations,
+  getSimulationHistory,
+  isSafetyResult,
+  type EvidenceCitation,
+  type RecommendationResponse,
+  type ScenarioResult,
+  type SimulationHistoryItem,
+  type ActivityInput,
+  type CheckinListItem,
+} from './services/api';
 import { mapFormDataToCheckinCreate } from './services/checkinMapper';
 import type { ActivityInput } from './services/api';
 import {
@@ -192,6 +206,9 @@ type ActionCardItem = {
   title: string;
   description: string;
   categoryKey: string;
+  tradeoff?: string;
+  evidence?: EvidenceCitation[];
+  activities?: ActivityInput[];
 };
 
 const LiquidButton = ({ children, onClick, variant = 'primary', className = "", icon: Icon }: any) => {
@@ -269,6 +286,7 @@ export default function App() {
   const [isCompleted, setIsCompleted] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState<AIRecommendation | null>(null);
+  const [recommendationResult, setRecommendationResult] = useState<RecommendationResponse | null>(null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showEthicsModal, setShowEthicsModal] = useState(false);
   const [isAboutUsOpen, setIsAboutUsOpen] = useState(false);
@@ -279,10 +297,18 @@ export default function App() {
   });
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [sessionHistory, setSessionHistory] = useState<any[]>([]);
+  const [isSafetyBlocked, setIsSafetyBlocked] = useState(false);
+  const emergencyDialogRef = useRef<HTMLDivElement>(null);
+  const [checkins, setCheckins] = useState<
+    CheckinListItem[]
+  >([]);
+  const [checkinHistory, setCheckinHistory] =
+  useState<CheckinListItem[]>([]);
   const [sessionId, setSessionId] = useState<string>('');
   const [showAllRecs, setShowAllRecs] = useState(false);
   const [selectedActionDetail, setSelectedActionDetail] = useState<ActionCardItem | null>(null);
   const [stepError, setStepError] = useState<string>('');
+  const [isResimulatingAlternative, setIsResimulatingAlternative] = useState(false);
   const [activeDataModule, setActiveDataModule] = useState<'dashboard' | 'analytics'>('dashboard');
   const [stressTrendPeriod, setStressTrendPeriod] = useState<'weekly' | 'monthly'>('weekly');
   const [radarAnimated, setRadarAnimated] = useState(false);
@@ -345,6 +371,12 @@ export default function App() {
       document.body.style.overflow = 'unset';
     };
   }, [showPrivacyModal, showEthicsModal, showEmergencyModal]);
+
+  useEffect(() => {
+    if (showEmergencyModal) {
+      emergencyDialogRef.current?.focus();
+    }
+  }, [showEmergencyModal]);
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -419,7 +451,11 @@ const featureLabels: Record<string, Record<string, string>> = {
     dizziness: 0,
     blurred_vision: 0,
     nausea: 0,
-    // Step 3: Physical
+    worsening_headache: false,
+    repeated_vomiting: false,
+    neurological_danger_sign: false,
+
+    // Step 3
     sleep_quality: 0,
     exercised_today: 'no' as 'yes' | 'no',
     symptoms_worsened_after_activity: 'no' as 'yes' | 'no',
@@ -565,8 +601,25 @@ const featureLabels: Record<string, Record<string, string>> = {
     }
 
     setIsAnalyzing(true);
+    setIsSafetyBlocked(false);
+    setRecommendationResult(null);
 
     try {
+      const explicitSafetyInput = {
+        worsening_headache: formData.worsening_headache,
+        repeated_vomiting: formData.repeated_vomiting,
+        neurological_danger_sign: formData.neurological_danger_sign,
+      };
+      const safetyResult = await checkSafety(explicitSafetyInput);
+      if (!safetyResult.downstream_allowed) {
+        setAiResult(null);
+        setRecommendationResult(null);
+        setIsCompleted(false);
+        setIsSafetyBlocked(true);
+        setShowEmergencyModal(true);
+        return;
+      }
+
       const todayIso = new Date()
         .toISOString()
         .slice(0, 10);
@@ -636,6 +689,32 @@ const featureLabels: Record<string, Record<string, string>> = {
       );
 
       /*
+      * STEP 6B:
+      * Track B Planner -> RAG citations -> Safety -> grounded wording.
+      * Red flags are explicit user answers; symptom scores are never
+      * silently converted into red-flag claims.
+      */
+      let trackBRecommendation: RecommendationResponse | null = null;
+      if (!isSafetyResult(simulationResult)) {
+        const recommendationResponse = await createRecommendations({
+          scenario_result: simulationResult as ScenarioResult,
+          activities,
+          safety_input: explicitSafetyInput,
+          audience: Number(formData.age) < 18 ? 'pediatric' : 'adult',
+          option_count: 3,
+        });
+
+        if (isSafetyResult(recommendationResponse)) {
+          viewModel = mergeSimulationResult(
+            adaptRecoveryProfile(profile),
+            recommendationResponse,
+          );
+        } else {
+          trackBRecommendation = recommendationResponse;
+        }
+      }
+
+      /*
       * STEP 7:
       * Convert backend ViewModel → existing UI type
       */
@@ -648,7 +727,16 @@ const featureLabels: Record<string, Record<string, string>> = {
       */
       setRecoveryProfile(profile);
 
+      setCheckins(updatedCheckins);
+
+      const history = await getSimulationHistory(
+        activeDemoUserId
+      );
+
+      setSimulationHistory(history);
       setAiResult(result);
+      setRecommendationResult(trackBRecommendation);
+      setIsSafetyBlocked(Boolean(viewModel.safetyBlocked));
 
       const history = await getSimulationHistory(
         activeDemoUserId
@@ -687,6 +775,63 @@ const featureLabels: Record<string, Record<string, string>> = {
   const prevStep = () => {
     if (currentStep > 1) setCurrentStep(prev => prev - 1);
     else setIsSurveyOpen(false);
+  };
+
+  const simulateAlternative = async (option: ActionCardItem) => {
+    if (!option.activities || !recoveryProfile) return;
+
+    setIsResimulatingAlternative(true);
+    setStepError('');
+    try {
+      const simulationResult = await createSimulation({
+        user_id: activeDemoUserId,
+        activities: option.activities,
+        label: option.title,
+      });
+      if (isSafetyResult(simulationResult)) {
+        setRecommendationResult(null);
+        setIsSafetyBlocked(true);
+        setShowEmergencyModal(true);
+        return;
+      }
+
+      const recommendationResponse = await createRecommendations({
+        scenario_result: simulationResult,
+        activities: option.activities,
+        safety_input: {
+          worsening_headache: formData.worsening_headache,
+          repeated_vomiting: formData.repeated_vomiting,
+          neurological_danger_sign: formData.neurological_danger_sign,
+        },
+        audience: Number(formData.age) < 18 ? 'pediatric' : 'adult',
+        option_count: 3,
+      });
+      if (isSafetyResult(recommendationResponse)) {
+        setRecommendationResult(null);
+        setIsSafetyBlocked(true);
+        setShowEmergencyModal(true);
+        return;
+      }
+
+      const nextViewModel = mergeSimulationResult(
+        adaptRecoveryProfile(recoveryProfile),
+        simulationResult,
+      );
+      setAiResult(viewModelToAIRecommendation(nextViewModel));
+      setRecommendationResult(recommendationResponse);
+      setIsSafetyBlocked(false);
+      setSelectedActionDetail(null);
+      setSimulationHistory(await getSimulationHistory(activeDemoUserId));
+    } catch (error) {
+      console.error('Unable to simulate alternative:', error);
+      setStepError(
+        language === 'vi'
+          ? 'Không thể mô phỏng phương án này. Hãy kiểm tra backend và thử lại.'
+          : 'Unable to simulate this alternative. Check the backend and try again.',
+      );
+    } finally {
+      setIsResimulatingAlternative(false);
+    }
   };
 
   // Helper to calculate color based on slider value
@@ -1019,16 +1164,22 @@ const featureLabels: Record<string, Record<string, string>> = {
       {showEmergencyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md">
           <motion.div
+            ref={emergencyDialogRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="emergency-dialog-title"
+            aria-describedby="emergency-dialog-description"
+            tabIndex={-1}
             key={language}
             initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
             className={`relative backdrop-blur-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] rounded-[2rem] overflow-hidden p-8 md:p-10 max-w-lg w-full text-center ${isDarkMode ? 'bg-[#0b132b]/80 border-white/10' : 'bg-white/95 border border-gray-200'}`}
             onClick={e => e.stopPropagation()}
           >
             <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${isDarkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-600'}`}>
-              <AlertTriangle className="w-10 h-10" />
+              <AlertTriangle className="w-10 h-10" aria-hidden="true" />
             </div>
-            <h2 className={`text-2xl font-bold mb-4 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>{t('emergency.title')}</h2>
-            <p className={`mb-6 text-lg ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`} dangerouslySetInnerHTML={{ __html: t('emergency.desc').replace('rất cao', '<strong>rất cao</strong>').replace('extremely high', '<strong>extremely high</strong>') }} />
+            <h2 id="emergency-dialog-title" className={`text-2xl font-bold mb-4 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>{t('emergency.title')}</h2>
+            <p id="emergency-dialog-description" className={`mb-6 text-lg ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('emergency.desc')}</p>
 
             <div className={`rounded-2xl p-6 mb-8 text-left ${isDarkMode ? 'bg-red-900/20 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
               <div className="flex items-center gap-4 mb-4">
@@ -1052,7 +1203,7 @@ const featureLabels: Record<string, Record<string, string>> = {
 
             <button
               onClick={() => setShowEmergencyModal(false)}
-              className={`font-medium underline ${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`min-h-12 rounded-lg px-4 font-medium underline focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${isDarkMode ? 'text-gray-200 hover:text-white' : 'text-gray-700 hover:text-gray-950'}`}
             >
               {t('emergency.btnUnderstand')}
             </button>
@@ -1119,17 +1270,20 @@ const featureLabels: Record<string, Record<string, string>> = {
       {selectedActionDetail && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md" onClick={() => setSelectedActionDetail(null)}>
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="action-detail-title"
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className={`relative max-w-lg w-full rounded-[2.5rem] p-8 md:p-10 shadow-2xl ${isDarkMode ? 'bg-slate-900 border border-white/10' : 'bg-white border border-slate-100'}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <button onClick={() => setSelectedActionDetail(null)} className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
-              <X className="w-5 h-5" />
+            <button aria-label={language === 'vi' ? 'Đóng giải thích' : 'Close explanation'} onClick={() => setSelectedActionDetail(null)} className="absolute top-5 right-5 flex h-11 w-11 items-center justify-center rounded-full hover:bg-slate-100 focus:ring-2 focus:ring-blue-500 dark:hover:bg-white/10 transition-colors">
+              <X className="w-5 h-5" aria-hidden="true" />
             </button>
             
-            <h3
+            <h3 id="action-detail-title"
               className={`text-2xl font-bold mb-4 pr-8 ${isDarkMode ? 'text-white' : 'text-black'}`}
               style={{ 
                 fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif",
@@ -1143,21 +1297,80 @@ const featureLabels: Record<string, Record<string, string>> = {
               {selectedActionDetail.description}
             </p>
 
-            <div className="space-y-4">
-              <h4 className={`text-sm font-bold uppercase tracking-widest ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                Các bước thực hiện:
-              </h4>
-              <ul className="space-y-4">
-                {(Array.isArray(t(`results.actionCards.${selectedActionDetail.id.replace('backend-','').replace('auto-','')}.steps`)) ? t(`results.actionCards.${selectedActionDetail.id.replace('backend-','').replace('auto-','')}.steps`) : [t('ui.noStepsAvailable')]).map((step: string, i: number) => (
-                  <li key={i} className="flex items-start gap-4">
-                    <div className="w-6 h-6 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0 text-xs font-bold border border-blue-500/20">
-                      {i + 1}
-                    </div>
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{step}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {selectedActionDetail.evidence ? (
+              <div className="space-y-5">
+                {selectedActionDetail.tradeoff && (
+                  <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-amber-400/30 bg-amber-400/10' : 'border-amber-200 bg-amber-50'}`}>
+                    <h4 className={`mb-1 text-sm font-bold ${isDarkMode ? 'text-amber-200' : 'text-amber-900'}`}>
+                      {language === 'vi' ? 'Điểm đánh đổi' : 'Trade-off'}
+                    </h4>
+                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                      {selectedActionDetail.tradeoff}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <h4 className={`mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                    <BookOpen className="h-4 w-4" aria-hidden="true" />
+                    {language === 'vi' ? 'Bằng chứng hướng dẫn' : 'Guideline evidence'}
+                  </h4>
+                  {selectedActionDetail.evidence.length ? (
+                    <ul className="space-y-3">
+                      {selectedActionDetail.evidence.map((citation) => (
+                        <li key={`${citation.source_id}-${citation.page}-${citation.section}`} className={`rounded-xl border p-4 ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-slate-50'}`}>
+                          <p className={`mb-2 text-sm leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                            “{citation.excerpt}”
+                          </p>
+                          <a
+                            href={citation.canonical_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`inline-flex min-h-11 items-center rounded-lg text-sm font-bold underline underline-offset-4 focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}
+                          >
+                            {citation.citation}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className={`rounded-xl border p-4 text-sm ${isDarkMode ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-600'}`}>
+                      {language === 'vi'
+                        ? 'Không truy xuất được nguồn hướng dẫn cho phương án này; hệ thống không đưa ra tuyên bố bằng chứng y khoa.'
+                        : 'No guideline source was retrieved for this option, so no clinical-evidence claim is shown.'}
+                    </p>
+                  )}
+                </div>
+                {selectedActionDetail.activities && (
+                  <button
+                    type="button"
+                    disabled={isResimulatingAlternative}
+                    onClick={() => simulateAlternative(selectedActionDetail)}
+                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-bold text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <Play className="h-4 w-4" aria-hidden="true" />
+                    {isResimulatingAlternative
+                      ? (language === 'vi' ? 'Đang mô phỏng...' : 'Simulating...')
+                      : (language === 'vi' ? 'Mô phỏng phương án này' : 'Simulate this alternative')}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h4 className={`text-sm font-bold uppercase tracking-widest ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                  Các bước thực hiện:
+                </h4>
+                <ul className="space-y-4">
+                  {(Array.isArray(t(`results.actionCards.${selectedActionDetail.id.replace('backend-','').replace('auto-','')}.steps`)) ? t(`results.actionCards.${selectedActionDetail.id.replace('backend-','').replace('auto-','')}.steps`) : [t('ui.noStepsAvailable')]).map((step: string, i: number) => (
+                    <li key={i} className="flex items-start gap-4">
+                      <div className="w-6 h-6 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0 text-xs font-bold border border-blue-500/20">
+                        {i + 1}
+                      </div>
+                      <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{step}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </motion.div>
         </div>
       )}
@@ -1267,6 +1480,52 @@ const featureLabels: Record<string, Record<string, string>> = {
                 <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
               </div>
             </div>
+
+            <fieldset className={`rounded-[2rem] border p-6 ${isDarkMode ? 'border-red-400/30 bg-red-950/20' : 'border-red-200 bg-red-50/80'}`}>
+              <legend className={`px-2 text-base font-extrabold ${isDarkMode ? 'text-red-200' : 'text-red-900'}`}>
+                {language === 'vi' ? 'Kiểm tra dấu hiệu cần chăm sóc khẩn cấp' : 'Check for symptoms needing urgent care'}
+              </legend>
+              <p className={`mb-4 text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                {language === 'vi'
+                  ? 'Chỉ chọn những dấu hiệu bạn đang thực sự gặp. Nếu có, hệ thống sẽ dừng khuyến nghị kế hoạch và hiển thị hướng dẫn tìm chăm sóc y tế.'
+                  : 'Select only symptoms you are actually experiencing. If any apply, planning recommendations stop and urgent-care guidance is shown.'}
+              </p>
+              <div className="grid grid-cols-1 gap-3">
+                {[
+                  {
+                    key: 'worsening_headache' as const,
+                    label: language === 'vi' ? 'Đau đầu đang nặng dần' : 'A headache that is getting worse',
+                  },
+                  {
+                    key: 'repeated_vomiting' as const,
+                    label: language === 'vi' ? 'Nôn nhiều lần' : 'Repeated vomiting',
+                  },
+                  {
+                    key: 'neurological_danger_sign' as const,
+                    label: language === 'vi'
+                      ? 'Lú lẫn, co giật, yếu/tê tay chân hoặc khó nói'
+                      : 'Confusion, seizure, limb weakness/numbness, or trouble speaking',
+                  },
+                ].map((item) => (
+                  <label
+                    key={item.key}
+                    className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm font-semibold transition-colors focus-within:ring-2 focus-within:ring-red-500 ${
+                      formData[item.key]
+                        ? (isDarkMode ? 'border-red-400 bg-red-500/20 text-red-100' : 'border-red-500 bg-white text-red-900')
+                        : (isDarkMode ? 'border-white/15 bg-white/5 text-slate-200' : 'border-red-100 bg-white/70 text-slate-700')
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData[item.key]}
+                      onChange={(event) => handleInputChange(item.key, event.target.checked)}
+                      className="h-5 w-5 accent-red-600"
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </motion.div>
         );
       case 3:
@@ -1577,6 +1836,204 @@ const featureLabels: Record<string, Record<string, string>> = {
         { label: 'Mood', you: 0, avg: 3, unit: '/5', youPct: 0, avgPct: 60 },
       ];
     }
+  };
+
+  const buildRecoveryTrendData = () => {
+    const calculateSymptomBurden = (
+      item: CheckinListItem
+    ) => {
+      const total =
+        item.headache +
+        item.dizziness +
+        item.blurred_vision +
+        item.nausea;
+
+      const maxTotal = 4 * 3;
+
+      return Math.round(
+        (total / maxTotal) * 100
+      );
+    };
+
+    if (!checkins || checkins.length === 0) {
+      return [];
+    }
+
+    const sorted = [...checkins]
+      .sort((a, b) =>
+        a.checkin_date.localeCompare(
+          b.checkin_date
+        )
+      );
+
+    if (stressTrendPeriod === 'weekly') {
+      return sorted
+        .slice(-7)
+        .map((item) => ({
+          label: new Date(
+            `${item.checkin_date}T00:00:00`
+          ).toLocaleDateString(
+            language === 'vi' ? 'vi-VN' : 'en-US',
+            {
+              weekday: 'short',
+            }
+          ),
+
+          symptomBurden:
+            calculateSymptomBurden(item),
+
+          date: item.checkin_date,
+        }));
+    }
+
+    const groups = new Map<
+      string,
+      number[]
+    >();
+
+    sorted.forEach((item) => {
+      const date = new Date(
+        `${item.checkin_date}T00:00:00`
+      );
+
+      const weekIndex =
+        `W${Math.floor(
+          (date.getDate() - 1) / 7
+        ) + 1}`;
+
+      const current =
+        groups.get(weekIndex) ?? [];
+
+      current.push(
+        calculateSymptomBurden(item)
+      );
+
+      groups.set(
+        weekIndex,
+        current
+      );
+    });
+
+    return Array.from(groups.entries())
+      .slice(-4)
+      .map(([label, values]) => ({
+        label,
+
+        symptomBurden:
+          Math.round(
+            values.reduce(
+              (sum, value) =>
+                sum + value,
+              0
+            ) / values.length
+          ),
+      }));
+  };
+
+  const buildStressTrendData = () => {
+    const history = [...checkins]
+      .sort(
+        (a, b) =>
+          new Date(a.checkin_date).getTime() -
+          new Date(b.checkin_date).getTime()
+      );
+
+    if (history.length === 0) {
+      return [];
+    }
+
+    const calculateLoad = (session: CheckinListItem) => {
+      const symptomScore =
+        (
+          session.headache +
+          session.dizziness +
+          session.blurred_vision +
+          session.nausea
+        ) / 4;
+
+      const cognitiveScore =
+        (
+          session.concentration_difficulty +
+          Math.min(session.screen_time_minutes / 120, 3) +
+          Math.min(session.study_work_minutes / 120, 3)
+        ) / 3;
+
+      const sleepPenalty =
+        session.sleep_quality == null
+          ? 0
+          : 3 - session.sleep_quality;
+
+      return Math.round(
+        ((symptomScore + cognitiveScore + sleepPenalty) / 9) * 100
+      );
+    };
+
+    const selectedHistory =
+      stressTrendPeriod === 'weekly'
+        ? history.slice(-7)
+        : history.slice(-30);
+
+    return selectedHistory.map((session) => ({
+      label: formatSessionDate(session.checkin_date),
+      stress: calculateLoad(session),
+    }));
+  };
+
+  const buildCalendarData = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const daysInMonth = new Date(
+      year,
+      month + 1,
+      0
+    ).getDate();
+
+    const firstDayOfWeek =
+      new Date(year, month, 1).getDay();
+
+    const stressPattern = Array(daysInMonth).fill(0);
+
+    const calculateLevel = (
+      session: CheckinListItem
+    ) => {
+      const symptomAverage =
+        (
+          session.headache +
+          session.dizziness +
+          session.blurred_vision +
+          session.nausea
+        ) / 4;
+
+      if (symptomAverage >= 2) return 3;
+      if (symptomAverage >= 1) return 2;
+
+      return 1;
+    };
+
+    checkins.forEach((session) => {
+      const date = new Date(session.checkin_date);
+
+      if (
+        date.getFullYear() === year &&
+        date.getMonth() === month
+      ) {
+        stressPattern[date.getDate() - 1] =
+          calculateLevel(session);
+      }
+    });
+
+    return {
+      daysInMonth,
+      firstDayOfWeek:
+        firstDayOfWeek === 0
+          ? 6
+          : firstDayOfWeek - 1,
+      stressPattern,
+      month,
+      year,
+    };
   };
 
   // Custom Radar tooltip
@@ -2366,8 +2823,17 @@ const featureLabels: Record<string, Record<string, string>> = {
     weekPlan: { titleKey: 'results.actionCards.weekPlanTitle', descKey: 'results.actionCards.weekPlanDesc' },
   };
 
-  const actionCards: ActionCardItem[] = aiResult
+  const actionCards: ActionCardItem[] = !isSafetyBlocked && aiResult
     ? (() => {
+      const plannerCards: ActionCardItem[] = (recommendationResult?.options ?? []).map((option) => ({
+        id: `planner-${option.alternative.alternative_id}`,
+        categoryKey: 'study',
+        title: option.alternative.title,
+        description: option.explanation,
+        tradeoff: option.alternative.tradeoff,
+        evidence: option.evidence,
+        activities: option.alternative.activities,
+      }));
       const base = aiResult.recommendations.map((rec: any) => {
         const i18nKey = rec.i18n_key as string | undefined;
         const mapped = i18nKey ? backendI18nMap[i18nKey] : undefined;
@@ -2381,7 +2847,7 @@ const featureLabels: Record<string, Record<string, string>> = {
       const personalized = buildPersonalizedActionCards(aiResult, formData);
       const merged: ActionCardItem[] = [];
       const seen = new Set<string>();
-      for (const card of [...base, ...personalized]) {
+      for (const card of [...plannerCards, ...base, ...personalized]) {
         if (seen.has(card.id)) continue;
         seen.add(card.id);
         merged.push(card);
@@ -3490,6 +3956,18 @@ const featureLabels: Record<string, Record<string, string>> = {
                                   <h3 className={`text-2xl font-extrabold tracking-tight ${isDarkMode ? 'text-gray-200' : 'text-slate-900'}`} style={{ fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif" }}>{t('ui.recommendedActions')}</h3>
                                   <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>{t('ui.recommendedActionsDesc')}</p>
                                 </div>
+                                {recommendationResult && (
+                                  <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-blue-400/20 bg-blue-400/10' : 'border-blue-200 bg-blue-50'}`} role="status">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                      <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                                        {recommendationResult.summary}
+                                      </p>
+                                      <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${isDarkMode ? 'bg-slate-900 text-blue-200' : 'bg-white text-blue-800'}`}>
+                                        {language === 'vi' ? 'Độ tin cậy quyết định' : 'Decision confidence'}: {Math.round(recommendationResult.confidence_score * 100)}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                                   {(showAllRecs ? actionCards : actionCards.slice(0, 4)).map((rec) => {
                                     const key = rec.categoryKey || '';
@@ -3510,7 +3988,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                                         icon={Icon}
                                         colorClass={colorClass}
                                         isBookmarked={bookmarkedRecs.includes(rec.id)}
-                                        detailsLabel={t('ui.details')}
+                                        detailsLabel={rec.evidence ? (language === 'vi' ? 'Tại sao?' : 'Why?') : t('ui.details')}
                                         bookmarkAriaLabel={t('results.saveRec')}
                                         onBookmark={(e) => { e.stopPropagation(); toggleBookmark(rec.id); }}
                                         onDetailClick={() => setSelectedActionDetail(rec)}
@@ -3547,6 +4025,8 @@ const featureLabels: Record<string, Record<string, string>> = {
                         setIsCompleted(false);
                         setCurrentStep(1);
                         setAiResult(null);
+                        setRecommendationResult(null);
+                        setIsSafetyBlocked(false);
                       }}
                       className="bg-blue-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors"
                     >

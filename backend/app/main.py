@@ -3,7 +3,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.db.database import Base, engine
+
+from app.models.checkin import DailyCheckin
+from app.models.user import User
+from app.models.simulation_history import SimulationHistory
+
 from app.api.routes.recovery import router as recovery_router
+from app.api.routes.recommendations import router as recommendations_router
 from app.api.routes.checkins import router as checkins_router
 from app.api.routes.scenario import router as scenario_router
 from app.api.routes.safety import router as safety_router
@@ -18,6 +25,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
+Base.metadata.create_all(bind=engine)
 
 app.add_middleware(
     CORSMiddleware,
@@ -95,6 +103,7 @@ async def unknown_activity_error_handler(
 app.include_router(checkins_router)
 app.include_router(scenario_router)
 app.include_router(recovery_router)
+app.include_router(recommendations_router)
 app.include_router(safety_router)
 app.include_router(simulation_router)
 

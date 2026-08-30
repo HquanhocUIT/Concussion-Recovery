@@ -40,12 +40,20 @@ class ChromaVectorStore:
             )
         return len(chunks)
 
-    def query(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        result = self.collection.query(
+    def query(
+        self,
+        query: str,
+        top_k: int = 5,
+        metadata_filter: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        query_args = dict(
             query_embeddings=self.embedder.embed([query]),
             n_results=top_k,
             include=["documents", "metadatas", "distances"],
         )
+        if metadata_filter:
+            query_args["where"] = metadata_filter
+        result = self.collection.query(**query_args)
         rows = []
         for document, metadata, distance in zip(
             result["documents"][0], result["metadatas"][0], result["distances"][0]

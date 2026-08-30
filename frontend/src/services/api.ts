@@ -34,6 +34,29 @@ export interface CheckinCreate {
   mood?: number | null; // 0-3, display-only on the backend
 }
 
+export interface CheckinListItem {
+  checkin_id: string;
+  user_id: string;
+  checkin_date: string;
+
+  headache: number;
+  dizziness: number;
+  blurred_vision: number;
+  nausea: number;
+
+  concentration_difficulty: number;
+
+  sleep_hours?: number | null;
+  sleep_quality?: number | null;
+
+  screen_time_minutes: number;
+  study_work_minutes: number;
+
+  symptoms_worsened_after_activity: SymptomsWorsenedAfterActivity;
+
+  mood?: number | null;
+}
+
 export interface CheckinResponse {
   checkin_id: string;
   status: "created" | "updated";
@@ -137,6 +160,62 @@ export interface SafetyResult {
   downstream_allowed: boolean;
 }
 
+export interface SafetyInput {
+  worsening_headache: boolean;
+  repeated_vomiting: boolean;
+  neurological_danger_sign: boolean;
+}
+
+export type RecommendationAudience = "general" | "adult" | "pediatric" | "sport";
+
+export interface EvidenceCitation {
+  excerpt: string;
+  citation: string;
+  source_id: string;
+  source_title: string;
+  canonical_url: string;
+  page: number;
+  section: string;
+  relevance_score: number;
+}
+
+export interface PlanAlternative {
+  alternative_id: string;
+  strategy: "remove_activity" | "reduce_duration" | "postpone_activity";
+  title: string;
+  rationale: string;
+  tradeoff: string;
+  activities: ActivityInput[];
+  postponed_activity?: ActivityInput | null;
+  modeled_demand: ModeledDemand;
+  improvement_score: number;
+}
+
+export interface RecommendationOption {
+  alternative: PlanAlternative;
+  explanation: string;
+  evidence: EvidenceCitation[];
+}
+
+export interface RecommendationResponse {
+  status: "recommendations_ready" | "no_change_needed";
+  summary: string;
+  options: RecommendationOption[];
+  confidence_score: number;
+  confidence_label: "limited" | "moderate" | "high";
+  model_used: string;
+  limitations: string[];
+  disclaimer: string;
+}
+
+export interface RecommendationRequest {
+  scenario_result: ScenarioResult;
+  activities: ActivityInput[];
+  safety_input: SafetyInput;
+  audience: RecommendationAudience;
+  option_count?: 2 | 3;
+}
+
 export interface ValidationErrorDetail {
   field: string;
   issue: string;
@@ -218,8 +297,10 @@ export function createCheckin(payload: CheckinCreate): Promise<CheckinResponse> 
 }
 
 /** GET /check-ins?user_id=... — list a user's check-ins, most recent first. */
-export function getCheckins(userId: string): Promise<unknown[]> {
-  return request<unknown[]>(`/check-ins?user_id=${encodeURIComponent(userId)}`);
+export function getCheckins(
+  userId: string
+): Promise<CheckinListItem[]> {
+  return request<CheckinListItem[]>(`/checkins/${userId}`);
 }
 
 /** GET /recovery/profile/{user_id} */
@@ -241,8 +322,34 @@ export function createSimulation(payload: SimulationRequest): Promise<ScenarioRe
   });
 }
 
-export function isSafetyResult(result: ScenarioResult | SafetyResult): result is SafetyResult {
-  return "safety_state" in result;
+/** POST /safety/check — deterministic red-flag gate. */
+export function checkSafety(payload: SafetyInput): Promise<SafetyResult> {
+  return request<SafetyResult>("/safety/check", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** POST /recommendations — Track B Planner + evidence + Safety + wording layer. */
+export function createRecommendations(
+  payload: RecommendationRequest,
+): Promise<RecommendationResponse | SafetyResult> {
+  return request<RecommendationResponse | SafetyResult>("/recommendations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function isSafetyResult(result: unknown): result is SafetyResult {
+  return typeof result === "object" && result !== null && "safety_state" in result;
+}
+
+export interface SimulationHistoryItem {
+  simulation_id: string;
+  user_id: string;
+  label: string;
+  created_at: string;
+  result: ScenarioResult;
 }
 
 export interface SimulationHistoryItem {

@@ -275,7 +275,7 @@ export const translations: Record<string, any> = {
     },
     emergency: {
       title: "Safety Alert",
-      desc: "Your Recovery Load is extremely high right now. Please do not hesitate to seek medical care immediately if you have severe or worsening symptoms. You are not alone!",
+      desc: "You reported one or more concussion warning signs. Planning recommendations have stopped. Please seek immediate medical evaluation.",
       hotlineLabel: "24/7 Concussion Support Line",
       btnCall: "Call Now",
       clinic: "Or contact your care team or nearest urgent care / emergency department if symptoms are severe (e.g. worsening headache, repeated vomiting, confusion, or loss of consciousness).",
@@ -668,7 +668,7 @@ export const translations: Record<string, any> = {
     },
     emergency: {
       title: "Cảnh báo An toàn",
-      desc: "Mức Tải Phục Hồi của bạn hiện đang rất cao. Đừng ngần ngại tìm kiếm chăm sóc y tế ngay lập tức nếu bạn có triệu chứng nặng hoặc đang xấu đi. Bạn không đơn độc!",
+      desc: "Bạn đã báo cáo ít nhất một dấu hiệu cảnh báo sau chấn động não. Hệ thống đã dừng khuyến nghị kế hoạch. Hãy tìm đánh giá y tế ngay lập tức.",
       hotlineLabel: "Đường dây hỗ trợ chấn động não 24/7",
       btnCall: "Gọi ngay",
       clinic: "Hoặc liên hệ đội ngũ chăm sóc của bạn, hoặc đến cơ sở cấp cứu gần nhất nếu triệu chứng nặng (ví dụ: đau đầu tăng nặng, nôn nhiều lần, lú lẫn, hoặc mất ý thức).",
