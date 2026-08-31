@@ -1,130 +1,132 @@
-# Video Pitch Script — RE:ENTRY (≤ 4 phút)
+# Video Pitch Script — RE:ENTRY (≤ 4 minutes)
 
-Track A + B (chung) — Phase 5, Pitch & Video submission.
+Track A + B (joint) — Phase 5, Pitch & Video submission.
 
-Yêu cầu nộp bài (theo [`challenge_information.txt`](../challenge_information.txt), Hack for
-Humanity): video tối đa 4 phút giải thích (1) vấn đề đang giải quyết, (2) phần mềm và chức năng
-chi tiết, (3) cách nó được xây dựng — kèm link GitHub repo public.
+Submission requirement (per [`challenge_information.txt`](../challenge_information.txt), Hack
+for Humanity): a video of at most 4 minutes explaining (1) the issue being solved, (2) the
+submitted software and its functionality in detail, (3) an overview of how it was created —
+along with a link to the public GitHub repo.
 
-Script dưới đây chia theo đúng 3 phần bắt buộc đó, có mốc thời gian, lời thoại gợi ý và cảnh quay
-tương ứng. Mọi tính năng nhắc tới trong script đều là tính năng **đã chạy thật** trong repo hiện
-tại (đã verify qua test suite và chạy local) — không mô tả tính năng dự định làm nhưng chưa có.
+The script below is split into exactly those 3 required parts, with timestamps, suggested
+narration, and the corresponding shots. Every feature mentioned in the script is a feature that
+**actually runs** in the current repo (verified via the test suite and a local run) — nothing
+described here is a planned-but-unbuilt feature.
 
-## Tổng thời lượng: ~3'50" (chừa 10s an toàn dưới mốc 4 phút)
-
----
-
-### Phần 1 — Vấn đề (0:00 – 0:45, ~45s)
-
-**Cảnh quay:** Người nói lên hình hoặc voice-over trên slide/animation đơn giản, không cần demo
-app ở phần này.
-
-**Lời thoại gợi ý:**
-
-> Sau một chấn động não — concussion — câu hỏi khó nhất không phải là "tôi có bị chấn thương
-> không", mà là: **"Ngày mai tôi có nên đi học, đi làm, hay tập thể thao không?"**
->
-> Các app hiện có chủ yếu giúp bạn *theo dõi* triệu chứng — ghi lại hôm nay đau đầu mức mấy,
-> ngủ được bao lâu. Nhưng chúng không giúp bạn *quyết định* điều gì sẽ xảy ra nếu bạn thực hiện
-> một kế hoạch cụ thể, trước khi bạn thực sự làm nó.
->
-> Đó là khoảng trống mà RE:ENTRY giải quyết.
-
-**Điểm bắt buộc phải nói:** vấn đề là *thiếu công cụ lập kế hoạch/dự đoán*, không phải thiếu
-công cụ theo dõi — đây là tiền đề cho phần "Innovation & Novelty" ở Phần 2.
+## Total runtime: ~3'50" (a 10s safety margin under the 4-minute cap)
 
 ---
 
-### Phần 2 — Phần mềm & chức năng chi tiết (0:45 – 3:00, ~2'15")
+### Part 1 — The Problem (0:00 – 0:45, ~45s)
 
-**Cảnh quay:** Screen recording thật trên `localhost:3001`, đi đúng luồng demo 4 bước đã verify
-(xem [`docs/PHASE_3_4.md`](PHASE_3_4.md) §Demo script 4 bước). Quay trước, cắt dựng sau — không
-quay live một lần vì cần chờ RAG service phản hồi (~1-2s mỗi lần).
+**Shot:** Speaker on camera or voice-over on a simple slide/animation — no app demo needed for
+this part.
 
-**Đoạn mở — nêu rõ Innovation & Novelty (0:45 – 1:10, ~25s):**
+**Suggested narration:**
 
-> Điểm khác biệt cốt lõi của RE:ENTRY: đây không phải một app *track* — theo dõi triệu chứng đã
-> xảy ra. Đây là một công cụ *plan* — mô phỏng "what-if": bạn nhập một kế hoạch **cho ngày mai**,
-> hệ thống mô phỏng mức tải kế hoạch đó gây ra cho não bạn, **trước khi** bạn thực hiện nó.
+> After a concussion, the hardest question isn't "am I injured" — it's:
+> **"Should I go to school, go to work, or work out tomorrow?"**
+>
+> Existing apps mostly help you *track* symptoms — logging today's headache level, how much you
+> slept. But they don't help you *decide* what will happen if you follow through on a specific
+> plan, before you actually do it.
+>
+> That's the gap RE:ENTRY fills.
 
-**Bước 1 — Check-in (1:10 – 1:35, ~25s):**
-
-- Quay: mở Daily Check-in, điền nhanh qua 5 bước (tuổi/giới tính → triệu chứng hôm nay → thể
-  chất/giấc ngủ → screen time/học tập → tâm trạng).
-- Lời thoại: "Mỗi ngày, người dùng check-in nhanh về triệu chứng và hoạt động. Dữ liệu này xây
-  dựng một **Recovery Profile** cá nhân hoá theo thời gian, không phải một ngưỡng chung cho tất
-  cả mọi người."
-
-**Bước 2 — Overload / Scenario Simulation (1:35 – 2:05, ~30s):**
-
-- Quay: nhập một kế hoạch hoạt động có cường độ cao (ví dụ coding nhiều giờ + screen time cao),
-  hệ thống trả về kết quả `modeled_overload` và cảnh báo trực quan.
-- Lời thoại: "Đây là tính năng lõi — **What-if Simulation**. Hệ thống ước lượng tải nhận thức,
-  tải thể chất, và mức phơi nhiễm màn hình của kế hoạch, so với khả năng chịu tải hiện tại của
-  người dùng — chứ không phải một ngưỡng y khoa cố định cho mọi người."
-
-**Bước 3 — Planner + "Why?" (2:05 – 2:40, ~35s):**
-
-- Quay: xem 3 phương án Planner đề xuất (bớt hoạt động / giảm thời lượng / dời lịch), bấm nút
-  **"Why?"** trên một phương án để mở trade-off + guideline excerpt + tên nguồn/trang/link.
-- Lời thoại: "Thay vì chỉ nói 'quá tải', hệ thống đưa ra nhiều **phương án thay thế cụ thể**,
-  kèm giải thích *tại sao* — trích dẫn trực tiếp từ 3 bộ guideline y khoa thật: Amsterdam 2022
-  Consensus Statement, Living Concussion Guidelines, và PedsConcussion — không tự bịa nội dung y
-  khoa."
-
-**Bước 4 — Safety gate + Guideline Assistant (2:40 – 3:00, ~20s):**
-
-- Quay: bật một red-flag checkbox ở bước Symptoms, submit, Emergency Modal hiện ngay, không có
-  action card nào được tạo. Sau đó mở nhanh nút chat "Guideline Assistant" ở góc màn hình, hỏi
-  một câu ví dụ ("How soon can I return to sport?").
-- Lời thoại: "Nếu phát hiện dấu hiệu nguy hiểm, hệ thống **chặn cứng** mọi khuyến nghị và yêu
-  cầu tìm hỗ trợ y tế ngay — bất kể các module khác nói gì. Người dùng cũng có thể hỏi nhanh
-  trợ lý guideline này — trợ lý chỉ trả lời từ bằng chứng đã tìm thấy, không đoán mò khi không
-  có bằng chứng."
+**Must be said:** the problem is a *missing planning/prediction tool*, not a missing tracking
+tool — this sets up the "Innovation & Novelty" point in Part 2.
 
 ---
 
-### Phần 3 — Cách nó được xây dựng (3:00 – 3:50, ~50s)
+### Part 2 — Software & functionality in detail (0:45 – 3:00, ~2'15")
 
-**Cảnh quay:** Có thể quay sơ đồ kiến trúc (đơn giản hoá từ README §3) hoặc voice-over trên vài
-đoạn code tiêu biểu (không cần đọc code chi tiết).
+**Shot:** Real screen recording on `localhost:3001`, following the verified 4-step demo flow
+(see [`docs/PHASE_3_4.md`](PHASE_3_4.md) §4-step demo script). Record first, edit later — don't
+attempt a single live take, since the RAG service takes ~1-2s to respond each time.
 
-**Lời thoại gợi ý:**
+**Opening — state Innovation & Novelty explicitly (0:45 – 1:10, ~25s):**
 
-> RE:ENTRY được chia thành các module độc lập, chạy theo một chuỗi cố định — quan trọng nhất là
-> **thứ tự ưu tiên an toàn**:
->
-> Recovery Engine đọc lịch sử check-in và mô phỏng kế hoạch bằng logic rule-based — không dùng
-> AI ở bước tính toán này, để kết quả luôn nhất quán và có thể giải thích được.
->
-> RAG evidence layer — dùng embedding model MiniLM và vector database Chroma — chỉ tìm và trích
-> dẫn bằng chứng, không tự quyết định.
->
-> Safety module chạy **trước** mọi bước khác và có quyền phủ quyết toàn bộ pipeline.
->
-> Cuối cùng, một lớp LLM — Claude — chỉ đóng vai trò diễn giải kết quả thành ngôn ngữ dễ hiểu.
-> Nếu tắt LLM đi, hệ thống vẫn hoạt động đầy đủ với câu trả lời dạng template có căn cứ — AI chỉ
-> làm cho dễ đọc hơn, không phải nơi ra quyết định.
+> RE:ENTRY's core difference: this isn't a *track* app — logging symptoms that already happened.
+> It's a *plan* tool — a "what-if" simulation: you enter a plan **for tomorrow**, and the system
+> simulates the load that plan would put on your brain, **before** you act on it.
 
-**Điểm bắt buộc phải nói:** thứ tự **Recovery Engine → RAG → Safety → LLM**, và nhấn mạnh Safety
-có quyền phủ quyết — đây là câu trả lời trực tiếp cho tiêu chí "Responsible AI".
+**Step 1 — Check-in (1:10 – 1:35, ~25s):**
+
+- Shot: open Daily Check-in, quickly fill in the 5 steps (age/gender → today's symptoms →
+  physical/sleep → screen time/study → mood).
+- Narration: "Every day, the user does a quick check-in on symptoms and activity. This data
+  builds a personalized **Recovery Profile** over time — not a one-size-fits-all threshold."
+
+**Step 2 — Overload / Scenario Simulation (1:35 – 2:05, ~30s):**
+
+- Shot: enter a high-intensity activity plan (e.g. many hours of coding plus high screen time),
+  the system returns a `modeled_overload` result with a visual warning.
+- Narration: "This is the core feature — **What-if Simulation**. The system estimates the plan's
+  cognitive load, physical load, and screen exposure against the user's current capacity — not a
+  fixed medical threshold applied to everyone."
+
+**Step 3 — Planner + "Why?" (2:05 – 2:40, ~35s):**
+
+- Shot: view the 3 alternatives the Planner suggests (drop an activity / reduce duration / move
+  it), click **"Why?"** on one to open the trade-off, guideline excerpt, source name/page/link.
+- Narration: "Instead of just saying 'overloaded', the system offers **concrete alternative
+  plans**, with an explanation of *why* — citing directly from 3 real medical guidelines:
+  the Amsterdam 2022 Consensus Statement, the Living Concussion Guidelines, and PedsConcussion —
+  never inventing medical content."
+
+**Step 4 — Safety gate + Guideline Assistant (2:40 – 3:00, ~20s):**
+
+- Shot: check a red-flag checkbox at the Symptoms step, submit, the Emergency Modal appears
+  immediately with no action card generated. Then quickly open the "Guideline Assistant" chat
+  button in the corner and ask a sample question ("How soon can I return to sport?").
+- Narration: "If a danger sign is detected, the system **hard-blocks** every recommendation and
+  asks the user to seek medical help immediately — regardless of what any other module says.
+  Users can also ask this guideline assistant a quick question — it only answers from evidence it
+  actually found, and never guesses when there's no evidence."
 
 ---
 
-### Kết (3:50 – 4:00, ~10s buffer)
+### Part 3 — How it was built (3:00 – 3:50, ~50s)
 
-> RE:ENTRY: không chỉ theo dõi bạn đang ở đâu, mà giúp bạn quyết định bước tiếp theo. Cảm ơn đã
-> xem.
+**Shot:** Can show an architecture diagram (simplified from README §4) or a voice-over on a few
+representative code snippets — no need to read code line by line.
 
-*(Hiện link GitHub repo trên màn hình ở giây cuối.)*
+**Suggested narration:**
+
+> RE:ENTRY is split into independent modules that run in a fixed sequence — the most important
+> part is the **safety-first ordering**:
+>
+> The Recovery Engine reads check-in history and simulates the plan using rule-based logic — no
+> AI at this computation step, so the result is always consistent and explainable.
+>
+> The RAG evidence layer — using the MiniLM embedding model and the Chroma vector database — only
+> finds and cites evidence, it never decides anything.
+>
+> The Safety module runs **before** every other step and has veto power over the entire pipeline.
+>
+> Finally, an LLM layer — Claude — only rephrases the result into plain language. Turn the LLM
+> off, and the system still works fully with a grounded template-based answer — AI only makes it
+> more readable, it's never where the decision is made.
+
+**Must be said:** the ordering **Recovery Engine → RAG → Safety → LLM**, and emphasize Safety's
+veto power — this directly answers the "Responsible AI" criterion.
 
 ---
 
-## Checklist trước khi nộp
+### Closing (3:50 – 4:00, ~10s buffer)
 
-- [ ] Video ≤ 4:00, đã export và xem lại toàn bộ.
-- [ ] Cả 3 phần bắt buộc đều có mặt: vấn đề / phần mềm+chức năng / cách xây dựng.
-- [ ] Đã nói rõ điểm khác biệt "track vs. plan" (Innovation & Novelty).
-- [ ] Demo quay từ app chạy thật (không phải mockup tĩnh).
-- [ ] Repo GitHub đã **public**, có README rõ ràng, không chứa secret/API key thật trong commit.
-- [ ] Link GitHub repo có trong mô tả video khi nộp.
+> RE:ENTRY: not just tracking where you are, but helping you decide what's next. Thanks for
+> watching.
+
+*(Show the GitHub repo link on screen during the last second.)*
+
+---
+
+## Pre-submission checklist
+
+- [ ] Video ≤ 4:00, exported and reviewed in full.
+- [ ] All 3 required parts are present: the issue / software+functionality / how it was built.
+- [ ] The "track vs. plan" difference (Innovation & Novelty) was explicitly stated.
+- [ ] The demo was recorded from the real running app (not a static mockup).
+- [ ] The GitHub repo is **public**, has a clear README, and contains no real secrets/API keys in
+      any commit.
+- [ ] The GitHub repo link is included in the video description on submission.
