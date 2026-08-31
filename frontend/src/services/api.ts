@@ -351,3 +351,11 @@ export interface SimulationHistoryItem {
   created_at: string;
   result: ScenarioResult;
 }
+
+export interface SimulationHistoryItem {
+  simulation_id: string;
+  user_id: string;
+  label: string;
+  created_at: string;
+  result: ScenarioResult;
+}
