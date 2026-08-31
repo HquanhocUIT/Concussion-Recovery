@@ -7,9 +7,11 @@ from typing import Any, TypeVar
 
 import httpx
 
+from app.orchestrator.chat_composer import ChatComposer
 from app.orchestrator.evidence import RagEvidenceClient, evidence_query
 from app.orchestrator.llm_composer import RecommendationComposer
 from app.planner.recovery_planner import plan_recovery_options
+from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.recommendation import (
     EvidenceCitation,
     RecommendationOption,
@@ -179,5 +181,60 @@ def run_recommendation_pipeline(
         confidence_label=confidence_label,
         model_used=model_used,
         limitations=list(dict.fromkeys(limitations)),
+        disclaimer="RE:ENTRY is decision support, not a diagnosis or a substitute for professional medical care.",
+    )
+
+
+CHAT_MIN_RELEVANCE_SCORE = 0.3
+
+
+def run_chat_pipeline(
+    request: ChatRequest,
+    evidence_client: RagEvidenceClient | None = None,
+    composer: ChatComposer | None = None,
+) -> SafetyResult | ChatResponse:
+    """Safety -> RAG retrieval -> grounded language composition.
+
+    The assistant only answers from retrieved guideline evidence. A red
+    flag prevents RAG and the LLM from executing. Missing evidence never
+    becomes an invented answer. Low-relevance retrieval results (the query
+    did not really match the corpus) are treated as no evidence rather than
+    forced into an answer, since a weak semantic match can surface unrelated
+    guideline text (e.g. a cognitive-test form) that would read as a
+    fabricated-sounding response even though every field is a real citation.
+    """
+
+    safety = evaluate_safety_gate(request.safety_input)
+    if not safety.downstream_allowed:
+        return safety
+
+    evidence_client = evidence_client or RagEvidenceClient()
+    try:
+        citations = evidence_client.retrieve(request.question, audience=request.audience, top_k=3)
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        citations = []
+
+    citations = [item for item in citations if item.relevance_score >= CHAT_MIN_RELEVANCE_SCORE]
+
+    if not citations:
+        return ChatResponse(
+            status="no_evidence_found",
+            answer=(
+                "No matching guideline evidence was found for this question in the current "
+                "corpus. This assistant only answers from retrieved guideline sources, so it "
+                "cannot invent an answer here."
+            ),
+            citations=[],
+            model_used="none",
+            disclaimer="RE:ENTRY is decision support, not a diagnosis or a substitute for professional medical care.",
+        )
+
+    composer = composer or ChatComposer()
+    answer, model_used = composer.compose(request.question, citations)
+    return ChatResponse(
+        status="answered",
+        answer=answer,
+        citations=citations,
+        model_used=model_used,
         disclaimer="RE:ENTRY is decision support, not a diagnosis or a substitute for professional medical care.",
     )

@@ -15,6 +15,7 @@ from app.api.routes.checkins import router as checkins_router
 from app.api.routes.scenario import router as scenario_router
 from app.api.routes.safety import router as safety_router
 from app.api.routes.simulation import router as simulation_router
+from app.api.routes.chat import router as chat_router
 
 from app.services.checkin_validation import CheckinValidationError
 from app.scenario_engine.activity_catalog import UnknownActivityError
@@ -106,6 +107,7 @@ app.include_router(recovery_router)
 app.include_router(recommendations_router)
 app.include_router(safety_router)
 app.include_router(simulation_router)
+app.include_router(chat_router)
 
 
 @app.get("/health")

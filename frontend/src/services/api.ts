@@ -344,6 +344,28 @@ export function isSafetyResult(result: unknown): result is SafetyResult {
   return typeof result === "object" && result !== null && "safety_state" in result;
 }
 
+export interface ChatRequest {
+  question: string;
+  audience: RecommendationAudience;
+  safety_input?: SafetyInput;
+}
+
+export interface ChatResponse {
+  status: "answered" | "no_evidence_found";
+  answer: string;
+  citations: EvidenceCitation[];
+  model_used: string;
+  disclaimer: string;
+}
+
+/** POST /chat — evidence-grounded guideline chat assistant. */
+export function sendChatMessage(payload: ChatRequest): Promise<ChatResponse | SafetyResult> {
+  return request<ChatResponse | SafetyResult>("/chat", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export interface SimulationHistoryItem {
   simulation_id: string;
   user_id: string;
