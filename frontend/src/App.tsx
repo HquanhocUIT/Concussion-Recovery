@@ -57,11 +57,6 @@ import {
 import { Player } from '@lottiefiles/react-lottie-player';
 import {
   createCheckin,
-  getRecoveryProfile,
-  createSimulation,
-  getSimulationHistory,
-  type SimulationHistoryItem,
-} from "./services/api";
   checkSafety,
   getCheckins,
   getRecoveryProfile,
@@ -77,7 +72,6 @@ import {
   type CheckinListItem,
 } from './services/api';
 import { mapFormDataToCheckinCreate } from './services/checkinMapper';
-import type { ActivityInput } from './services/api';
 import {
   adaptRecoveryProfile,
   mergeSimulationResult,
@@ -727,7 +721,6 @@ const featureLabels: Record<string, Record<string, string>> = {
       */
       setRecoveryProfile(profile);
 
-      setCheckins(updatedCheckins);
 
       const history = await getSimulationHistory(
         activeDemoUserId
@@ -737,14 +730,6 @@ const featureLabels: Record<string, Record<string, string>> = {
       setAiResult(result);
       setRecommendationResult(trackBRecommendation);
       setIsSafetyBlocked(Boolean(viewModel.safetyBlocked));
-
-      const history = await getSimulationHistory(
-        activeDemoUserId
-      );
-
-      setSimulationHistory(history);
-
-      setIsCompleted(true);
 
       /*
       * Safety / high concern
@@ -1696,77 +1681,6 @@ const featureLabels: Record<string, Record<string, string>> = {
         { subject: 'Physical Activity', value: 50, fullMark: 100 },
         { subject: 'Mood', value: 50, fullMark: 100 },
       ];
-    }
-  };
-
-  const buildStressTrendData = () => {
-    try {
-      const weekly = [
-        { label: 'Mon', stress: 45, avg: 52 },
-        { label: 'Tue', stress: 62, avg: 55 },
-        { label: 'Wed', stress: 38, avg: 50 },
-        { label: 'Thu', stress: 71, avg: 58 },
-        { label: 'Fri', stress: 55, avg: 53 },
-        { label: 'Sat', stress: 30, avg: 42 },
-        { label: 'Sun', stress: 25, avg: 38 },
-      ];
-      const monthly = [
-        { label: 'W1', stress: 48, avg: 50 },
-        { label: 'W2', stress: 65, avg: 54 },
-        { label: 'W3', stress: 42, avg: 51 },
-        { label: 'W4', stress: 58, avg: 55 },
-      ];
-      // Blend with actual session data if available
-      if (sessionHistory && sessionHistory.length > 0) {
-        const lastScore = Number(sessionHistory[sessionHistory.length - 1]?.stressScore ?? 50);
-        if (!isNaN(lastScore) && lastScore >= 0 && lastScore <= 100) {
-          if (stressTrendPeriod === 'weekly') {
-            weekly[weekly.length - 1].stress = lastScore;
-          } else {
-            monthly[monthly.length - 1].stress = lastScore;
-          }
-        }
-      }
-      return stressTrendPeriod === 'weekly' ? weekly : monthly;
-    } catch (error) {
-      console.error('Error in buildStressTrendData:', error);
-      return [
-        { label: 'Mon', stress: 50, avg: 50 },
-        { label: 'Tue', stress: 50, avg: 50 },
-        { label: 'Wed', stress: 50, avg: 50 },
-        { label: 'Thu', stress: 50, avg: 50 },
-        { label: 'Fri', stress: 50, avg: 50 },
-        { label: 'Sat', stress: 50, avg: 50 },
-        { label: 'Sun', stress: 50, avg: 50 },
-      ];
-    }
-  };
-
-  const buildCalendarData = () => {
-    try {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sun
-      // Stress levels: 0=none, 1=low, 2=medium, 3=high
-      const stressPattern = [1, 1, 2, 3, 2, 1, 1, 2, 3, 3, 2, 1, 1, 2, 3, 3, 2, 2, 1, 1, 2, 2, 2, 1, 1, 1, 2, 3, 3, 2, 1];
-      const currentStress = aiResult?.recovery_load_level === 'High' ? 3 : aiResult?.recovery_load_level === 'Medium' ? 2 : 1;
-      const dateNum = now.getDate();
-      if (dateNum >= 1 && dateNum <= stressPattern.length) {
-        stressPattern[dateNum - 1] = currentStress;
-      }
-      return { daysInMonth, firstDayOfWeek: firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1, stressPattern, month, year };
-    } catch (error) {
-      console.error('Error in buildCalendarData:', error);
-      const now = new Date();
-      return { 
-        daysInMonth: 30, 
-        firstDayOfWeek: 0, 
-        stressPattern: Array(31).fill(1), 
-        month: now.getMonth(), 
-        year: now.getFullYear() 
-      };
     }
   };
 
