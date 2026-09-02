@@ -78,6 +78,7 @@ export const translations: Record<string, any> = {
     // Questions (Steps 1-5) — Daily Check-in for concussion recovery
     questions: {
       s1Title: "Step 1: Basic Info",
+
       q1: "1. What is your current age?",
       q2: "2. What is your gender?",
       genderMale: "Male",
@@ -94,16 +95,15 @@ export const translations: Record<string, any> = {
       s3Title: "Step 3: Physical",
       q8: "8. Sleep quality last night (0 = Worst, 5 = Best)?",
       q9: "9. Did your symptoms get worse after activity today?",
-      yes: "Yes",
-      no: "No",
+      q10: "10. Screen time today (0 = None, 5 = Very heavy)?",
 
       s4Title: "Step 4: Cognitive Load",
-      q10: "10. Screen time today (0 = None, 5 = Very heavy)?",
       q11: "11. Study or work hours today (0 = None, 5 = Very heavy)?",
       q12: "12. Difficulty reading or concentrating today (0 = None, 5 = Severe)?",
-
-      s5Title: "Step 5: Mood & Recovery Context",
       q13: "13. How would you rate your mood today (0 = Very low, 5 = Great)?",
+
+      yes: "Yes",
+      no: "No",
     },
     // Results & Emergency
     results: {
@@ -481,22 +481,18 @@ export const translations: Record<string, any> = {
       s2Title: "Bước 2: Triệu chứng hôm nay",
       q4: "4. Mức độ đau đầu hôm nay (0 = Không, 5 = Nặng)?",
       q5: "5. Mức độ chóng mặt hôm nay (0 = Không, 5 = Nặng)?",
-      q6: "6. Mức độ mờ mắt hôm nay (0 = Không, 5 = Nặng)?",
+      q6: "6. Mức độ nhìn mờ hôm nay (0 = Không, 5 = Nặng)?",
       q7: "7. Mức độ buồn nôn hôm nay (0 = Không, 5 = Nặng)?",
 
       s3Title: "Bước 3: Thể chất",
       q8: "8. Chất lượng giấc ngủ đêm qua (0 = Tệ nhất, 5 = Tốt nhất)?",
-      q9: "9. Triệu chứng của bạn có nặng hơn sau khi vận động hôm nay không?",
-      yes: "Có",
-      no: "Không",
+      q9: "9. Các triệu chứng có nặng hơn sau khi vận động hôm nay không?",
+      q10: "10. Thời gian sử dụng màn hình hôm nay (0 = Không có, 5 = Rất nhiều)?",
 
       s4Title: "Bước 4: Tải nhận thức",
-      q10: "10. Thời gian dùng màn hình hôm nay (0 = Không, 5 = Rất nhiều)?",
-      q11: "11. Số giờ học tập/làm việc hôm nay (0 = Không, 5 = Rất nhiều)?",
-      q12: "12. Mức độ khó đọc hoặc tập trung hôm nay (0 = Không, 5 = Nặng)?",
-
-      s5Title: "Bước 5: Tâm trạng & Bối cảnh phục hồi",
-      q13: "13. Bạn đánh giá tâm trạng hôm nay thế nào (0 = Rất tệ, 5 = Rất tốt)?",
+      q11: "11. Số giờ học tập/làm việc hôm nay (0 = Không có, 5 = Rất nhiều)?",
+      q12: "12. Mức độ khó đọc hoặc tập trung hôm nay (0 = Không có, 5 = Nặng)?",
+      q13: "13. Bạn đánh giá tâm trạng hôm nay thế nào (0 = Rất thấp, 5 = Rất tốt)?",
     },
     // Results & Emergency
     results: {

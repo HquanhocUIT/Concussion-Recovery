@@ -32,20 +32,51 @@ def _target_index(activities: list[ActivityInput]) -> int:
     return max(candidates)[1]
 
 
-def _improvement(original: ModeledDemand, alternative: ModeledDemand) -> float:
+_LONG_BLOCK_MINUTES = 90
+
+
+def _improvement(
+    original: ModeledDemand,
+    alternative: ModeledDemand,
+    original_activities: list[ActivityInput],
+    alternative_activities: list[ActivityInput],
+) -> float:
+    """Score relative improvement between two modeled plans.
+
+    This remains an engineering heuristic. In addition to demand buckets,
+    it rewards removal of a sustained continuous block.
+    """
+
     demand_fields = (
         "cognitive_demand_level",
         "physical_demand_level",
         "screen_exposure_level",
     )
+
     gain = sum(
-        _LEVEL[getattr(original, field)] - _LEVEL[getattr(alternative, field)]
+        _LEVEL[getattr(original, field)]
+        - _LEVEL[getattr(alternative, field)]
         for field in demand_fields
     )
+
     gain += 0.5 * (
         _LEVEL[alternative.recovery_opportunity_level]
         - _LEVEL[original.recovery_opportunity_level]
     )
+
+    original_has_long_block = any(
+        activity.duration_minutes >= _LONG_BLOCK_MINUTES
+        for activity in original_activities
+    )
+
+    alternative_has_long_block = any(
+        activity.duration_minutes >= _LONG_BLOCK_MINUTES
+        for activity in alternative_activities
+    )
+
+    if original_has_long_block and not alternative_has_long_block:
+        gain += 1.0
+
     return round(float(gain), 2)
 
 
@@ -106,7 +137,7 @@ def generate_alternatives(
                 activities=plan,
                 postponed_activity=postponed,
                 modeled_demand=modeled_demand,
-                improvement_score=_improvement(original_demand, modeled_demand),
+                improvement_score=_improvement(original=original_demand, alternative=modeled_demand, original_activities=activities, alternative_activities=plan,),
             )
         )
     return alternatives
