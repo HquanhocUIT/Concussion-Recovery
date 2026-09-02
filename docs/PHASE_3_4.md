@@ -1,12 +1,15 @@
 # Track B — Phase 3 & 4
 
-## Mục tiêu
+## Goal
 
-Phase 3 biến kết quả mô phỏng của Track A thành các phương án kế hoạch có thể so sánh, kèm trade-off, bằng chứng guideline và confidence. Phase 4 đưa phần giải thích và Safety vào UI để demo end-to-end.
+Phase 3 turns Track A's simulation result into comparable plan alternatives, with trade-offs,
+guideline evidence, and confidence. Phase 4 brings the explanation and Safety flow into the UI
+for an end-to-end demo.
 
-Đây là công cụ hỗ trợ quyết định. `modeled_overload` là kết quả so sánh kỹ thuật, không phải kết luận kế hoạch “an toàn/không an toàn” về mặt y khoa.
+This is a decision-support tool. `modeled_overload` is a technical comparison result, not a
+medical "safe/unsafe" conclusion about the plan.
 
-## Kiến trúc đã triển khai
+## Implemented architecture
 
 ```text
 Track A ScenarioResult + submitted activities + explicit SafetyInput
@@ -17,66 +20,74 @@ Track A ScenarioResult + submitted activities + explicit SafetyInput
                     └─ SAFE
                          │
                          ▼
-            alternatives.py: tạo 3 biến thể
-            ├─ bỏ hoạt động có modeled impact lớn nhất
-            ├─ giảm một nửa thời lượng hoạt động đó
-            └─ dời hoạt động đó sang ngày khác
+            alternatives.py: generates 3 variants
+            ├─ drop the activity with the highest modeled impact
+            ├─ cut that activity's duration in half
+            └─ move that activity to another day
                          │
                          ▼
           workload_model.calculate_activity_load()
-              tính lại demand cho từng phương án
+              recomputes demand for each alternative
                          │
                          ▼
-        recovery_planner.py: xếp hạng + giữ 2–3 phương án
+        recovery_planner.py: ranks + keeps 2–3 alternatives
                          │
                          ▼
        RAG /retrieve: excerpt + source + page + section + URL
                          │
                          ▼
-        llm_composer.py: Claude nếu có key, grounded fallback nếu không
+        llm_composer.py: Claude if a key is set, grounded fallback otherwise
                          │
                          ▼
           POST /recommendations → options + citations + confidence
                          │
                          ▼
-        React: Action Card → “Why?” → citation → simulate again
+        React: Action Card → "Why?" → citation → simulate again
 ```
 
-Safety chạy trước Planner/RAG/LLM. Vì vậy red flag luôn chặn downstream, bất kể `modeled_overload` là `true` hay `false`.
+Safety runs before Planner/RAG/LLM. A red flag therefore always blocks downstream processing,
+regardless of whether `modeled_overload` is `true` or `false`.
 
-## File chính
+## Key files
 
 ### Backend
 
-- `backend/app/schemas/recommendation.py`: request/response contract của `/recommendations`.
-- `backend/app/planner/alternatives.py`: sinh ba biến thể và gọi trực tiếp workload model của Track A.
-- `backend/app/planner/recovery_planner.py`: xếp hạng theo cải thiện modeled demand và tính khả thi.
-- `backend/app/orchestrator/evidence.py`: gọi RAG service, chỉ nhận citation đủ source/page/section/URL.
-- `backend/app/orchestrator/llm_composer.py`: lớp diễn đạt; không được tự thay đổi quyết định/citation.
-- `backend/app/orchestrator/pipeline.py`: Safety → Planner → RAG → Composer, confidence và limitations.
-- `backend/app/api/routes/recommendations.py`: endpoint `POST /recommendations`.
-- `backend/tests/test_recommendations.py`: test Planner, hard safety block, citations, confidence và API.
+- `backend/app/schemas/recommendation.py`: request/response contract for `/recommendations`.
+- `backend/app/planner/alternatives.py`: generates the three variants and calls Track A's
+  workload model directly.
+- `backend/app/planner/recovery_planner.py`: ranks by modeled-demand improvement and feasibility.
+- `backend/app/orchestrator/evidence.py`: calls the RAG service, only accepts citations complete
+  with source/page/section/URL.
+- `backend/app/orchestrator/llm_composer.py`: the wording layer; must never change the
+  decision/citations on its own.
+- `backend/app/orchestrator/pipeline.py`: Safety → Planner → RAG → Composer, confidence and
+  limitations.
+- `backend/app/api/routes/recommendations.py`: the `POST /recommendations` endpoint.
+- `backend/tests/test_recommendations.py`: tests for the Planner, the hard safety block,
+  citations, confidence, and the API.
 
 ### Frontend
 
-- `frontend/src/services/api.ts`: type và client cho `/recommendations`.
-- `frontend/src/types.ts`: ba câu trả lời red-flag rõ ràng trong check-in.
+- `frontend/src/services/api.ts`: types and client for `/recommendations`.
+- `frontend/src/types.ts`: the three explicit red-flag answers in the check-in.
 - `frontend/src/App.tsx`:
-  - gọi Track B sau khi nhận `ScenarioResult`;
-  - hiển thị Planner options trước các suggestion cũ;
-  - nút “Why?” mở excerpt + citation;
-  - nút “Simulate this alternative” gửi kế hoạch thay thế lại Track A;
-  - không render action cards khi Safety blocked;
-  - Emergency Modal dùng `role="alertdialog"`, focus khi mở và không phụ thuộc modeled load.
-- `frontend/src/translations.ts`: sửa Emergency copy để nói đúng red flag, không gọi modeled load là nguy hiểm.
+  - calls Track B after receiving a `ScenarioResult`;
+  - renders Planner options ahead of the older suggestions;
+  - a "Why?" button opens the excerpt + citation;
+  - a "Simulate this alternative" button resubmits the alternative plan to Track A;
+  - never renders action cards when Safety has blocked;
+  - the Emergency Modal uses `role="alertdialog"`, gets focus on open, and never depends on the
+    modeled load.
+- `frontend/src/translations.ts`: fixed the Emergency copy to correctly reference the red flag,
+  instead of calling modeled load "dangerous".
 
-## Contract `POST /recommendations`
+## `POST /recommendations` contract
 
-Request tối thiểu:
+Minimal request:
 
 ```json
 {
-  "scenario_result": { "...": "Track A ScenarioResult đầy đủ" },
+  "scenario_result": { "...": "the full Track A ScenarioResult" },
   "activities": [
     { "activity_id": "coding", "duration_minutes": 180 }
   ],
@@ -90,16 +101,19 @@ Request tối thiểu:
 }
 ```
 
-Nếu có red flag, response là `SafetyResult` và không chạy Planner/RAG/LLM. Nếu Safety cho phép, response gồm:
+On a red flag, the response is a `SafetyResult` and the Planner/RAG/LLM never run. When Safety
+allows it, the response includes:
 
-- `options[]`: phương án, demand tính lại, trade-off, explanation và evidence;
-- `confidence_score`: độ tin cậy của pipeline quyết định, không phải xác suất y khoa;
-- `limitations[]` và disclaimer;
-- `model_used`: tên Claude hoặc `deterministic-grounded-template`.
+- `options[]`: each alternative, its recomputed demand, trade-off, explanation, and evidence;
+- `confidence_score`: confidence in the decision pipeline, not a medical probability;
+- `limitations[]` and a disclaimer;
+- `model_used`: the Claude model name, or `deterministic-grounded-template`.
 
-Khi RAG không sẵn sàng, endpoint vẫn trả phương án rule-based nhưng evidence rỗng, confidence bị giới hạn và limitation nói rõ. Hệ thống không tạo citation giả.
+When the RAG service is unavailable, the endpoint still returns rule-based alternatives, but with
+empty evidence, capped confidence, and an explicit limitation. The system never invents a
+citation.
 
-## Cấu hình
+## Configuration
 
 ```env
 # backend/.env
@@ -108,9 +122,10 @@ ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5
 ```
 
-Không bắt buộc có Anthropic key để demo. Có key thì Claude chỉ viết lại nội dung đã grounded; không có key thì deterministic composer hoạt động.
+An Anthropic key is not required for the demo. With a key, Claude only rewords the already
+grounded content; without one, the deterministic composer takes over.
 
-## Chạy local
+## Running locally
 
 Terminal 1 — RAG:
 
@@ -133,26 +148,32 @@ cd D:\CODING\Concussion_Recovery\frontend
 npm run dev
 ```
 
-## Demo script 4 bước
+## 4-step demo script
 
-1. Hoàn thành Daily Check-in với kế hoạch có thời lượng screen/study cao, không chọn red flag.
-2. Xem kết quả Track A báo `modeled_overload` và ba phương án Planner xuất hiện.
-3. Bấm **Why?** ở một phương án để xem trade-off, guideline excerpt, tên nguồn, trang/section và link.
-4. Bấm **Simulate this alternative**; kế hoạch thay thế được gửi lại Track A và UI cập nhật kết quả mới.
+1. Complete a Daily Check-in with a plan that has high screen/study duration, without checking
+   any red flag.
+2. Observe Track A's `modeled_overload` result and the three Planner alternatives that appear.
+3. Click **Why?** on an alternative to see the trade-off, the guideline excerpt, the source name,
+   page/section, and link.
+4. Click **Simulate this alternative**; the alternative plan is resubmitted to Track A and the UI
+   updates with the new result.
 
-Demo Safety riêng: chọn một red-flag checkbox ở bước Symptoms. Khi submit, `/recommendations` trả `BLOCKED_RED_FLAG`, không có action card và Emergency Modal mở ngay.
+Separate Safety demo: check a red-flag checkbox at the Symptoms step. On submit,
+`/recommendations` returns `BLOCKED_RED_FLAG`, no action card is shown, and the Emergency Modal
+opens immediately.
 
-## Kết quả xác minh ngày 2026-08-29
+## Verification results — 2026-08-29
 
 - Backend: `106 passed`.
-- RAG: `10 passed` bằng `rag/.venv`.
-- Frontend: `npm run lint` pass.
-- Frontend: `npm run build` pass.
-- End-to-end backend → RAG thật:
+- RAG: `10 passed` using `rag/.venv`.
+- Frontend: `npm run lint` passes.
+- Frontend: `npm run build` passes.
+- Real end-to-end backend → RAG run:
   - HTTP `200`;
-  - `3` phương án;
-  - `2` citation/phương án;
-  - confidence `0.77` trong case kiểm thử;
-  - composer fallback hoạt động khi không có Anthropic key.
+  - `3` alternatives;
+  - `2` citations per alternative;
+  - confidence `0.77` in the test case;
+  - the composer fallback works correctly with no Anthropic key set.
 
-Vite còn cảnh báo bundle lớn hơn 500 kB. Đây là tối ưu hiệu năng nên làm sau; không chặn chức năng Phase 3–4.
+Vite still warns about a bundle larger than 500 kB. That's a performance optimization for later;
+it does not block Phase 3–4 functionality.

@@ -43,3 +43,6 @@ rag/data/processed/chroma/
 
 # Local SQLite databases
 *.db
+
+# Temp Chromium profile created by frontend/scripts/capture-phase5.mjs
+.phase5-browser-profile/

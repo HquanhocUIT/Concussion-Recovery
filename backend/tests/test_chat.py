@@ -1,0 +1,132 @@
+from fastapi.testclient import TestClient
+
+from app.api.routes.chat import get_chat_composer, get_evidence_client
+from app.main import app
+from app.orchestrator.chat_composer import ChatComposer
+from app.orchestrator.pipeline import run_chat_pipeline
+from app.schemas.chat import ChatRequest
+from app.schemas.recommendation import EvidenceCitation
+from app.schemas.safety import SafetyInput
+
+
+class StubEvidenceClient:
+    def __init__(self, results=None):
+        self.calls = 0
+        self._results = results if results is not None else [
+            EvidenceCitation(
+                excerpt="A gradual, symptom-limited return to activity is recommended.",
+                citation="Amsterdam 2022 Consensus Statement, p. 12, RETURN-TO-LEARN",
+                source_id="amsterdam-2022-consensus",
+                source_title="Amsterdam 2022 Consensus Statement",
+                canonical_url="https://bjsm.bmj.com/content/57/11/695",
+                page=12,
+                section="RETURN-TO-LEARN",
+                relevance_score=0.91,
+            )
+        ]
+
+    def retrieve(self, query: str, audience: str, top_k: int = 3):
+        self.calls += 1
+        assert query
+        assert audience in {"general", "adult", "pediatric", "sport"}
+        return self._results
+
+
+def test_red_flag_blocks_rag_and_composer_path():
+    evidence = StubEvidenceClient()
+    request = ChatRequest(
+        question="Can I go back to playing soccer this week?",
+        safety_input=SafetyInput(repeated_vomiting=True),
+    )
+
+    result = run_chat_pipeline(request, evidence, ChatComposer(api_key=""))
+
+    assert result.safety_state == "BLOCKED_RED_FLAG"
+    assert result.downstream_allowed is False
+    assert evidence.calls == 0
+
+
+def test_no_evidence_does_not_invent_an_answer():
+    evidence = StubEvidenceClient(results=[])
+    request = ChatRequest(question="What is the capital of France?")
+
+    result = run_chat_pipeline(request, evidence, ChatComposer(api_key=""))
+
+    assert result.status == "no_evidence_found"
+    assert result.citations == []
+    assert result.model_used == "none"
+
+
+def test_low_relevance_retrieval_is_treated_as_no_evidence():
+    evidence = StubEvidenceClient(results=[
+        EvidenceCitation(
+            excerpt="List Alternate 10 word lists Score (of 10) Trial 1 Trial 2 Trial 3",
+            citation="Living Concussion Guidelines (Adults), p. 112, ORIENTATION",
+            source_id="living-concussion-guidelines-adults-3e",
+            source_title="Guideline for Concussion/Mild Traumatic Brain Injury & Prolonged Symptoms, Third Edition",
+            canonical_url="https://concussionsontario.org/",
+            page=112,
+            section="ORIENTATION",
+            relevance_score=0.073,
+        )
+    ])
+    request = ChatRequest(question="What is the best pizza topping?")
+
+    result = run_chat_pipeline(request, evidence, ChatComposer(api_key=""))
+
+    assert result.status == "no_evidence_found"
+    assert result.citations == []
+
+
+def test_answered_response_is_grounded_in_retrieved_citations():
+    evidence = StubEvidenceClient()
+    request = ChatRequest(question="How soon can I return to sport?", audience="sport")
+
+    result = run_chat_pipeline(request, evidence, ChatComposer(api_key=""))
+
+    assert result.status == "answered"
+    assert evidence.calls == 1
+    assert result.model_used == "deterministic-grounded-template"
+    assert result.citations[0].source_id == "amsterdam-2022-consensus"
+    assert "gradual" in result.answer
+
+
+def test_chat_endpoint_exposes_grounded_contract():
+    evidence = StubEvidenceClient()
+    app.dependency_overrides[get_evidence_client] = lambda: evidence
+    app.dependency_overrides[get_chat_composer] = lambda: ChatComposer(api_key="")
+    try:
+        response = TestClient(app).post(
+            "/chat",
+            json={"question": "How soon can I return to sport?", "audience": "sport"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_evidence_client, None)
+        app.dependency_overrides.pop(get_chat_composer, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "answered"
+    assert body["citations"][0]["source_id"] == "amsterdam-2022-consensus"
+
+
+def test_chat_endpoint_blocks_on_red_flag_without_calling_rag():
+    evidence = StubEvidenceClient()
+    app.dependency_overrides[get_evidence_client] = lambda: evidence
+    app.dependency_overrides[get_chat_composer] = lambda: ChatComposer(api_key="")
+    try:
+        response = TestClient(app).post(
+            "/chat",
+            json={
+                "question": "Is it safe to drive today?",
+                "safety_input": {"neurological_danger_sign": True},
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_evidence_client, None)
+        app.dependency_overrides.pop(get_chat_composer, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["safety_state"] == "BLOCKED_RED_FLAG"
+    assert evidence.calls == 0

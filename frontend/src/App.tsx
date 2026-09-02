@@ -71,6 +71,7 @@ import {
   type ActivityInput,
   type CheckinListItem,
 } from './services/api';
+import ChatWidget from './components/ChatWidget';
 import { mapFormDataToCheckinCreate } from './services/checkinMapper';
 import {
   adaptRecoveryProfile,
@@ -2978,7 +2979,13 @@ const featureLabels: Record<string, Record<string, string>> = {
             : 'bg-white/40 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)] rounded-full px-5 py-2'
             }`}>
             <div className="flex items-center gap-8 min-w-0">
-              <div className={`text-xl font-bold tracking-tight cursor-pointer transition-colors duration-500 ${isDarkMode ? 'text-white' : 'text-[#0b132b]'}`} onClick={() => { setIsSurveyOpen(false); setIsCompleted(false); setIsAboutUsOpen(false); setCurrentStep(1); }}>{t('appName')}</div>
+              <div
+                className={`flex items-center gap-2 text-xl font-bold tracking-tight cursor-pointer transition-colors duration-500 ${isDarkMode ? 'text-white' : 'text-[#0b132b]'}`}
+                onClick={() => { setIsSurveyOpen(false); setIsCompleted(false); setIsAboutUsOpen(false); setCurrentStep(1); }}
+              >
+                <img src="/logo.svg" alt="" aria-hidden="true" className="h-7 w-7 rounded-lg" />
+                <span>{t('appName')}</span>
+              </div>
               {!isSurveyOpen && !isAboutUsOpen && (
                 <nav className={`hidden md:flex items-center gap-6 text-sm font-semibold ${isDarkMode ? 'text-gray-300' : 'text-slate-800'}`}>
                   <button onClick={() => setIsAboutUsOpen(true)} className={`transition-colors ${isDarkMode ? 'hover:text-white' : 'hover:text-blue-700'}`}>{t('nav.about')}</button>
@@ -3534,7 +3541,10 @@ const featureLabels: Record<string, Record<string, string>> = {
               }`}>
               <div className="container mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div>
-                  <div className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-[#0b132b]'}`}>{t('appName')}</div>
+                  <div className={`flex items-center gap-2 text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-[#0b132b]'}`}>
+                    <img src="/logo.svg" alt="" aria-hidden="true" className="h-6 w-6 rounded-lg" />
+                    <span>{t('appName')}</span>
+                  </div>
                   <div className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>© 2026 ConcussionRecovery — Plan your safe return to life.</div>
                 </div>
 
@@ -4071,6 +4081,7 @@ const featureLabels: Record<string, Record<string, string>> = {
           </motion.div>
         )}
     </AnimatePresence>
+    <ChatWidget isDarkMode={isDarkMode} language={language} />
   </div>
   );
 }

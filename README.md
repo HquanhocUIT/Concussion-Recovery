@@ -1,223 +1,257 @@
-# RE:ENTRY — AI Recovery Scenario Engine HTTN
+# RE:ENTRY — AI Recovery Scenario Engine
 
 > **Existing tools help people track recovery. RE:ENTRY helps them plan their return to real life.**
 
-Dự án tham gia **Hack for Humanity** — hackathon tập trung vào giải pháp công nghệ cho sức khỏe tinh thần & thể chất.
+Built for **Hack for Humanity** — track **Concussion Recovery** (presented by Concussion Alliance
+& Synapse), secondary track **Best Use of AI/ML & Responsible AI**, and **Best Use of Render**.
 
-Track dự thi:
-- Mental & Physical Health
-- Best Tech for Concussion Recovery
-- Best Use of AI/ML & Responsible AI
-- Best Innovation and Creativity
-- Best Design
+**Live demo:** https://reentry-frontend-4jw2.onrender.com
+
+Submission requirements: [`challenge_information.txt`](challenge_information.txt).
+Full judging criteria: [`criteria/Concusion_recovery/`](criteria/Concusion_recovery/).
 
 ---
 
 ## 1. Problem
 
-Người sau **concussion / mild traumatic brain injury (mTBI)** thường không biết khi nào và ở mức độ nào họ có thể quay lại học tập, làm việc, thể thao và cuộc sống bình thường.
+People recovering from a **concussion / mild traumatic brain injury (mTBI)** often don't know
+when — or at what intensity — they can safely return to school, work, sport, and normal life.
 
-Các công cụ hiện có chủ yếu tập trung vào **theo dõi triệu chứng**, nhưng chưa thực sự hỗ trợ người dùng **lập kế hoạch và đánh giá khả năng chịu tải cá nhân** trước khi họ thực hiện một hoạt động.
+Existing tools mostly focus on **tracking symptoms that already happened**, but don't help users
+**simulate ahead of time** whether a specific activity plan is appropriate for their recent
+recovery pattern.
 
 ## 2. Solution
 
-RE:ENTRY là một nền tảng AI hỗ trợ quá trình **return-to-life**. Hệ thống xây dựng **Personal Recovery Model** từ dữ liệu hồi phục theo thời gian của người dùng, sau đó cho phép họ nhập kế hoạch hoạt động và sử dụng **What-if Recovery Simulation** để mô phỏng mức độ tải, phát hiện nguy cơ quá tải (overload) và đề xuất cách điều chỉnh phù hợp — có trích dẫn bằng chứng y khoa.
+RE:ENTRY is a **decision-support system**, not a diagnostic tool. It reads a user's check-in
+history to build a Recovery Profile, then lets them run a **"what-if" simulation**: if I do this
+plan, what will the load on my brain look like — before they actually do it.
 
-RE:ENTRY **không phải chatbot AI** mà là một **AI Decision Support System**. Hệ thống không cố nói cho người dùng biết họ đang bị gì, mà giúp họ trả lời: *"Ngày mai tôi nên sống như thế nào để vừa quay lại cuộc sống bình thường, vừa không làm chậm quá trình hồi phục?"*
+> This is the core difference from a typical symptom-tracking app: RE:ENTRY doesn't just **track**
+> (log what happened) — it **plans** (simulates before you act).
 
-### Core Flow — 5 module lõi + 1 người phát ngôn
+### Product flow
+
+```
+Check-in → Recovery State → Plan → Simulate → Adjust → Compare → Explain Why
+```
+
+### Core pipeline — safety-first ordering
 
 ```
 Daily Check-in Data
         │
         ▼
-1. Recovery Intelligence   → đọc lịch sử check-in, học ngưỡng tải cá nhân → Recovery Profile
+1. Recovery Intelligence     → reads check-in history → Recovery Profile (trend, uncertainty, data sufficiency)
         │
         ▼
-2. Scenario Simulation Engine → ước lượng tải của kế hoạch ngày mai, so với Recovery Capacity
+2. Scenario Simulation Engine → estimates plan load (rule-based, deterministic, no LLM)
         │
         ▼
-3. Recovery Planner        → thử nhiều phương án điều chỉnh, chọn ra các trade-off hợp lý nhất
+3. Recovery Planner          → on overload, generates multiple alternatives with trade-offs
         │
         ▼
-4. RAG (evidence layer)    → CHỈ chứng minh/giải thích quyết định đã có bằng guideline, KHÔNG tự quyết định
+4. Safety Gate               → checks red flags FIRST; if found, hard-blocks the entire pipeline
+        │            (Planner/RAG/LLM are never called when Safety blocks)
+        ▼
+5. RAG evidence layer        → ONLY finds & cites guideline evidence, NEVER decides
         │
         ▼
-5. Safety AI (gatekeeper)  → chặn cứng nếu phát hiện red-flag symptoms, bất kể các module trên nói gì
-        │
-        ▼
-   LLM Orchestrator        → "người phát ngôn": ghép kết quả 5 module thành câu trả lời dễ hiểu
-                              (không tính toán, không mô phỏng, không tự quyết định — đổi LLM khác
-                               hệ thống vẫn hoạt động y hệt)
+   LLM Composer               → the "spokesperson": rewords the result into plain language
+                                 (swap/disable the LLM and the system still returns the exact
+                                  same grounded result, just phrased differently)
 ```
 
-**Nguyên tắc quan trọng:** Recovery Engine (module 1-3) quyết định → RAG chứng minh → Safety xác nhận an toàn → LLM diễn giải. Giá trị cốt lõi của RE:ENTRY nằm ở logic/mô hình dữ liệu cá nhân, không nằm ở model ngôn ngữ.
+**Principle:** the Recovery Engine decides → Safety has absolute veto over the whole pipeline →
+RAG proves it with real guidelines → the LLM only rephrases. The core value lives in the
+logic/data model, not the language model — turn the LLM off and the system still works fully,
+returning a grounded template-based answer.
 
-### Killer Feature — What-if Recovery Simulation
+### Killer feature — What-if Recovery Simulation
 
-> *"Nếu ngày mai tôi làm những việc này thì sao?"*
+Users try different activity scenarios (attending class, working out, coding, working...), the
+system simulates the load on the brain based on their personal Recovery Profile, flags what's
+driving overload risk (`modeled_overload`), and suggests adjustments **before** the user acts on
+the plan.
 
-Người dùng thử nhiều kịch bản hoạt động khác nhau (đi học, tập gym, chơi game, đi làm...), hệ thống mô phỏng mức tải lên hệ thần kinh dựa trên Personal Recovery Model, chỉ ra yếu tố nào gây nguy cơ quá tải, và đề xuất điều chỉnh **trước khi** người dùng thực hiện.
+### Guideline Assistant (chat)
 
-### AI/ML Components
+Besides the check-in/simulate flow, users can ask a floating chat assistant a quick question
+(`POST /chat`). It **only answers from evidence the RAG layer actually retrieved** — if no
+guideline passage clears the minimum relevance threshold, it says so explicitly instead of making
+something up. It goes through the same Safety gate as the main flow.
 
-- **Recovery Intelligence**: phân tích lịch sử check-in, học ngưỡng chịu tải nhận thức (cognitive load) & vận động (physical load) riêng của từng người → tạo Recovery Profile (Recovery Stage, Cognitive/Physical Capacity, Recovery Trend, Recovery Buffer)
-- **Scenario Simulation Engine**: ước lượng tải của từng hoạt động trong kế hoạch, cộng dồn và so sánh với Recovery Capacity hiện tại
-- **Recovery Planner**: sinh & so sánh nhiều phương án điều chỉnh (bỏ hoạt động nào, giảm thời lượng, dời lịch...) thay vì chỉ đưa một lời khuyên duy nhất
-- **RAG evidence layer**: truy xuất bằng chứng từ guideline y khoa (Amsterdam Consensus Statement, CDC Guideline, Concussion Alliance...) để giải thích "tại sao", không dùng để ra quyết định
-- **Safety AI**: guardrail cuối cùng, phát hiện red-flag symptoms (đau đầu dữ dội, nôn, mờ mắt...) và chặn mọi khuyến nghị, yêu cầu gặp bác sĩ ngay
-- **LLM Orchestrator**: ghép kết quả các module trên thành khuyến nghị dễ hiểu kèm độ tin cậy — thuần vai trò diễn giải, có thể thay model (Claude/GPT/Gemini) mà không ảnh hưởng logic hệ thống
+### ⚠️ Medical disclaimer
 
-### ⚠️ Lưu ý y khoa
-
-RE:ENTRY **không chẩn đoán và không thay thế bác sĩ**. Đây là công cụ hỗ trợ ra quyết định và lập kế hoạch hồi phục dựa trên dữ liệu cá nhân kết hợp bằng chứng y khoa đã được kiểm chứng (evidence-based).
+RE:ENTRY **does not diagnose, does not confirm recovery, does not issue medical clearance, and
+does not replace a physician**. `modeled_overload` is a technical comparison result (an
+engineering heuristic), not a medical "safe/unsafe" determination. See
+[`docs/research-foundation.md`](docs/research-foundation.md) for the full list of limitations.
 
 ---
 
-## 3. System Architecture
+## 3. How this maps to the judging criteria
+
+| Criterion (judging panel) | How RE:ENTRY addresses it | Evidence in the repo |
+|---|---|---|
+| **Clinical & Domain Effectiveness** (Concussion Alliance) | The entire flow follows the *graded, symptom-limited return to activity* principle shared by the track's 3 reference guidelines | [`docs/research-foundation.md`](docs/research-foundation.md), [`rag/data/raw_guidelines/sources.json`](rag/data/raw_guidelines/sources.json) |
+| **Safety & Responsible Design** (Concussion Alliance) | Safety runs before Planner/RAG/LLM with absolute veto power; the system never self-diagnoses or confirms recovery | [`backend/app/orchestrator/pipeline.py`](backend/app/orchestrator/pipeline.py), [`backend/tests/test_orchestrator_safety_gate.py`](backend/tests/test_orchestrator_safety_gate.py) |
+| **Neuroscience Understanding** (Synapse) | The workload model separates 4 demand axes (cognitive/physical/screen/recovery), matching how the guidelines distinguish different symptom triggers | [`docs/research-foundation.md`](docs/research-foundation.md) §3 |
+| **Research Foundation** (Synapse) | Every piece of returned evidence keeps its source/page/section/URL; citations are never invented; limitations are stated explicitly when no source exists | [`docs/research-foundation.md`](docs/research-foundation.md) §5, [`rag/src/retrieval/`](rag/src/retrieval/) |
+| **Technical Complexity** (technical judges) | Two-stage RAG (vector search + cross-encoder re-rank), audience hard-filtering, a deterministic Safety gate, a multi-step orchestrator, and a 4-service Render deployment (see §6) | [`rag/src/retrieval/retriever.py`](rag/src/retrieval/retriever.py), [`backend/app/orchestrator/`](backend/app/orchestrator/), [`render.yaml`](render.yaml) |
+| **UX & Accessibility** (technical judges) | Skip link, `:focus-visible`, `aria-pressed`/`role=progressbar`, ≥44px touch targets, `prefers-reduced-motion`, smoke-tested at 390px | [`docs/PHASE_5_UIUX.md`](docs/PHASE_5_UIUX.md) |
+
+---
+
+## 4. System Architecture (as actually built)
 
 ```
-concussion-recovery/
+Concussion_Recovery/
 ├── README.md
-├── docker-compose.yml              # dựng db + backend + rag cùng lúc cho local dev
-├── .dockerignore
-├── .github/workflows/ci.yml        # CI: build/test backend, rag, frontend; build Docker image làm artifact
-├── docs/                          # Pitch deck, kiến trúc, luồng dữ liệu, video demo script
+├── challenge_information.txt        # original submission requirements
+├── criteria/                        # detailed judging criteria (PDF)
+├── render.yaml                      # Render Blueprint — see §6
+├── docker-compose.yml                # Postgres + rag + backend for a production-like local run
+├── .github/workflows/ci.yml          # CI: test + build backend/rag, typecheck + build frontend
+├── docs/
+│   ├── codex.md                      # internal context-handover log between work sessions
+│   ├── PHASE_2.md, PHASE_3_4.md, PHASE_5_UIUX.md  # per-phase implementation notes
+│   ├── research-foundation.md        # scientific grounding for the workload model (Research Foundation)
+│   ├── video-pitch-script.md         # 4-minute pitch video script
+│   └── screenshots/                  # before/after UI screenshots (Phase 5)
 │
-├── frontend/                       # Web app (Vite + React + TypeScript, kế thừa từ UI mindscan-ai)
-│   ├── public/                     # static assets, favicon, public/data/articles.json
+├── frontend/                         # Vite + React + TypeScript
 │   ├── src/
-│   │   ├── App.tsx                 # toàn bộ UI hiện tại (dashboard, gauge chart, action card...),
-│   │   │                           #   đã có sẵn dark/light mode (isDarkMode, Tailwind `dark:`)
-│   │   ├── main.tsx                # entry point
-│   │   ├── index.css               # theme tokens, background, glassmorphism styles
-│   │   ├── components/             # ArticleCard, ArticleSection, PDFReportWrapper, SkeletonArticle...
-│   │   ├── services/                # geminiService.ts — sẽ thay/nối vào API client gọi Backend RE:ENTRY
-│   │   ├── data/                    # articles.json (dữ liệu mẫu, sẽ thay bằng data thật)
-│   │   ├── translations.ts          # đa ngôn ngữ
-│   │   ├── types.ts
-│   │   └── Modern-Login-master/     # trang login tĩnh (HTML/CSS/JS) — nguồn tham khảo UI đăng nhập,
-│   │                                #   cần chuyển thành React component khi tích hợp vào flow chính
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── tsconfig.json
+│   │   ├── App.tsx                   # full UI flow: check-in, dashboard, action cards
+│   │   ├── components/               # ChatWidget (Guideline Assistant), PDFReportWrapper
+│   │   ├── services/api.ts           # client for the real backend (no mocks)
+│   │   └── translations.ts           # vi/en bilingual copy
 │   └── package.json
 │
-│   > TODO tích hợp: đổi tên component/route cho khớp domain RE:ENTRY (Check-in, Recovery Dashboard,
-│   > What-if Simulator, Plan Tomorrow); nối `services/` vào Backend thay vì gọi thẳng Gemini;
-│   > chuyển `Modern-Login-master` thành component đăng nhập React dùng chung theme dark/light của App.tsx.
-│
-├── backend/                       # Core API + 5 module lõi + orchestrator (FastAPI)
+├── backend/                          # FastAPI — API + 5 core modules + orchestrator
 │   ├── app/
-│   │   ├── api/routes/             # /checkins, /recovery-profile, /simulate, /plan, /recommendations
-│   │   ├── core/                   # config, security, logging
-│   │   ├── models/                 # ORM models (User, CheckIn, Activity, Scenario, RecoveryProfile)
-│   │   ├── schemas/                 # Pydantic request/response schemas
-│   │   ├── services/                # application services, gọi vào các module lõi bên dưới
-│   │   │
-│   │   ├── recovery_intelligence/  # (1) đọc lịch sử check-in → Recovery Profile
-│   │   │   ├── trend_analysis.py   #     phát hiện pattern (ngủ ít → đau đầu tăng, code >4h → nặng hơn...)
-│   │   │   └── recovery_profile.py #     build Recovery Stage / Capacity / Trend / Buffer
-│   │   │
-│   │   ├── scenario_engine/        # (2) Scenario Simulation Engine — "trái tim" của RE:ENTRY
-│   │   │   ├── workload_model.py   #     ước lượng tải từng hoạt động (cognitive/physical load)
-│   │   │   └── scenario_engine.py  #     cộng dồn tải kế hoạch, so với Recovery Capacity
-│   │   │
-│   │   ├── planner/                # (3) Recovery Planner — sinh & so sánh phương án thay thế
-│   │   │   ├── alternatives.py     #     thử các biến thể (bỏ hoạt động X, giảm giờ Y, dời lịch...)
-│   │   │   └── recovery_planner.py #     chọn ra các phương án hợp lý nhất kèm trade-off
-│   │   │
-│   │   ├── safety/                 # (5) Safety AI — gatekeeper cuối cùng, chạy sau mọi module khác
-│   │   │   ├── red_flags.py        #     nhận diện red-flag symptoms
-│   │   │   └── guardrails.py       #     chặn cứng khuyến nghị khi có red-flag
-│   │   │
-│   │   ├── orchestrator/           # (6) LLM Orchestrator — "người phát ngôn", không ra quyết định
-│   │   │   ├── pipeline.py         #     chạy tuần tự: Recovery Intelligence → Scenario → Planner → RAG → Safety
-│   │   │   └── llm_composer.py     #     ghép kết quả thành câu trả lời + confidence, gọi LLM client trong rag/
-│   │   │
-│   │   └── db/                     # DB session, migrations helper
-│   ├── tests/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── .env.example
+│   │   ├── api/routes/               # /check-ins, /recovery, /simulations, /recommendations, /chat, /safety
+│   │   ├── recovery_intelligence/    # reads check-in history → Recovery Profile
+│   │   ├── scenario_engine/          # workload_model.py — estimates plan load (rule-based)
+│   │   ├── planner/                  # generates & ranks alternative plans
+│   │   ├── safety/                   # red-flag rules, deterministic, no LLM
+│   │   ├── orchestrator/             # pipeline.py — Safety → Planner → RAG → Composer
+│   │   │                             # chat_composer.py — wording layer for the Guideline Assistant
+│   │   └── db/                       # SQLite for local dev / Postgres in production (see §6)
+│   └── tests/                        # 112 tests
 │
-├── rag/                            # (4) RAG evidence layer — CHỈ giải thích/chứng minh, không quyết định
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── .env.example
-│   ├── config.yaml
-│   ├── main.py
-│   ├── src/
-│   │   ├── ingestion/              # load PDF/guideline nguồn (CDC, RTL/RTP protocols...)
-│   │   ├── chunking/                # chia nhỏ tài liệu y khoa
-│   │   ├── embeddings/              # tạo vector embedding
-│   │   ├── vectordb/                # lưu trữ & truy vấn vector store
-│   │   ├── retrieval/               # retriever kết hợp filter theo mức độ hồi phục
-│   │   ├── prompts/                 # prompt template cho explainable recommendation
-│   │   ├── llm/                     # LLM client (grounded generation + citation)
-│   │   ├── api/                     # expose RAG như 1 service nội bộ cho backend gọi
-│   │   └── utils/
-│   ├── data/
-│   │   ├── raw_guidelines/          # tài liệu y khoa gốc (RTL, RTP, mTBI guidelines)
-│   │   └── processed/               # đã chunk + embed
-│   ├── tests/
-│   └── logs/
-│
-├── data/                           # Data contracts & seed data dùng chung FE/BE
-│   ├── schemas/                    # JSON schema / OpenAPI contracts
-│   ├── seed/                       # dữ liệu mẫu demo (sample recovery journeys)
-│   └── migrations/                 # DB migration scripts
-│
-└── criteria/                       # Tài liệu tiêu chí chấm giải (đã có sẵn)
+└── rag/                              # RAG evidence service — its own FastAPI app, port 8100
+    ├── src/
+    │   ├── ingestion/                 # PDF → text → chunks
+    │   ├── embeddings/                # sentence-transformers/all-MiniLM-L6-v2
+    │   ├── vectordb/                  # Chroma, audience hard-filter
+    │   └── retrieval/                 # retriever + cross-encoder re-ranker + benchmark
+    ├── data/raw_guidelines/           # the 3 source guideline PDFs + sources.json (citation metadata)
+    └── tests/                         # 10 tests
 ```
 
 ---
 
-## 4. Chạy dự án (local)
+## 5. Running locally (verified)
+
+The three services run independently; Docker/Postgres are not required for dev — the backend
+defaults to SQLite (`backend/app/db/database.py`).
 
 ```bash
-# Backend + RAG + PostgreSQL cùng lúc
-cp backend/.env.example backend/.env
-cp rag/.env.example rag/.env
-docker compose up --build
-# backend: http://localhost:8000/health
-# rag:     http://localhost:8100/health
+# Terminal 1 — RAG evidence service
+cd rag
+python -m venv .venv && .venv/Scripts/activate   # Windows; source .venv/bin/activate on Linux/Mac
+pip install -r requirements.txt
+python main.py ingest                             # builds the Chroma index from the 3 guideline PDFs (run once)
+python -m uvicorn main:app --host 127.0.0.1 --port 8100
 
-# Frontend (chạy riêng, không Dockerize)
+# Terminal 2 — Backend
+cd backend
+pip install -r requirements.txt
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+# health check: http://127.0.0.1:8000/health
+
+# Terminal 3 — Frontend
 cd frontend
 npm install
+echo "VITE_API_BASE_URL=http://127.0.0.1:8000" > .env
 npm run dev
 ```
 
-CI (`.github/workflows/ci.yml`) tự động chạy test + build Docker image cho `backend`/`rag` và typecheck + build cho `frontend` mỗi khi push/PR vào `main`.
+`ANTHROPIC_API_KEY` is **optional** (`backend/.env`, `rag/.env` — copy from `.env.example`).
+Without a key, `/recommendations` and `/chat` still return full results via a grounded template
+composer (`model_used: "deterministic-grounded-template"`); with a key, Claude only rephrases —
+it never changes the decision or the citations.
+
+CI (`.github/workflows/ci.yml`) automatically runs tests and builds Docker images for
+`backend`/`rag`, and typechecks + builds the `frontend`, on every push/PR to `main`.
 
 ---
 
-## 5. Tech Stack (đề xuất)
+## 6. Deployment — Render
 
-| Layer | Công nghệ |
+RE:ENTRY is deployed on **Render** as 4 managed resources, defined in one
+[`render.yaml`](render.yaml) Blueprint and deployed with a single `Apply`:
+
+| Resource | Render service type | Role |
+|---|---|---|
+| `reentry-db` | Managed Postgres | Persistent storage for check-ins and simulation history — replaces the SQLite file used for local dev |
+| `reentry-rag` | Web Service (Docker) | RAG evidence service — the Chroma index is **baked into the image at build time** (`RUN python main.py ingest` in [`rag/Dockerfile`](rag/Dockerfile)), so the container serves real citations immediately on boot instead of needing a first-run ingestion step against an ephemeral disk |
+| `reentry-backend` | Web Service (Docker) | FastAPI backend — the 5 core modules + orchestrator |
+| `reentry-frontend` | Static Site | The React app, built with `npm run build` and served from Render's CDN |
+
+**Live demo:** https://reentry-frontend-4jw2.onrender.com
+
+What the Blueprint actually wires together (not just "deployed", but designed for the platform):
+
+- `reentry-backend`'s `DATABASE_URL` and `reentry-rag`'s hostname are injected automatically via
+  Render's `fromDatabase` / `fromService` blueprint references — no URL is hardcoded anywhere in
+  the app config.
+- [`backend/app/db/database.py`](backend/app/db/database.py) reads `DATABASE_URL` from the
+  environment, falling back to `sqlite:///./concussion.db` only when the variable is absent — the
+  exact same code path targets Render's managed Postgres in production and SQLite for a
+  zero-setup local dev run.
+- Both backend Dockerfiles bind to `${PORT}` at runtime (Render assigns this dynamically per
+  deploy) instead of a hardcoded port.
+- A dedicated `.dockerignore` in both `backend/` and `rag/` keeps the build context lean (the
+  `rag/` local virtualenv alone is 1.3GB and must never be sent to the Docker daemon).
+
+Every piece of this was built and verified against a real, locally-built Docker image before
+being pushed — including confirming the RAG container returns the exact same relevance scores as
+the existing retrieval benchmark once deployed with the baked-in index.
+
+To reproduce the same setup: `New` → `Blueprint` on Render, connect this repository, point it at
+`main`, and `Apply`. `ANTHROPIC_API_KEY` can be left blank (see §5).
+
+---
+
+## 7. Tech Stack
+
+| Layer | Technology |
 |---|---|
-| Frontend | React + TypeScript, Next.js, TailwindCSS, Recharts (visualize load/trend) |
-| Backend | Python, FastAPI, PostgreSQL |
-| Recovery Intelligence / Scenario Engine / Planner | Python (rule-based + statistical model trên dữ liệu cá nhân, không dùng LLM) |
-| RAG | LangChain/LlamaIndex-style pipeline tự viết, vector DB (Chroma/FAISS), embedding model, LLM API (Claude) |
-| Auth & Data privacy | JWT, mã hoá dữ liệu sức khoẻ cá nhân, tuân thủ tinh thần HIPAA-like |
-| Deploy | Render (theo yêu cầu "Best Use of Render") |
+| Frontend | React 19 + TypeScript, Vite, TailwindCSS, Recharts |
+| Backend | Python, FastAPI, SQLAlchemy + SQLite (local dev) / Postgres (Render, docker-compose) |
+| Recovery Intelligence / Scenario Engine / Planner | Pure Python, rule-based/deterministic — no LLM at the computation step |
+| RAG | `pypdf`, `sentence-transformers/all-MiniLM-L6-v2`, ChromaDB, `cross-encoder/ms-marco-MiniLM-L-6-v2` re-ranking |
+| LLM (wording layer, optional) | Claude (Anthropic API) — deterministic fallback when no key is set |
+| Deploy | Render (Blueprint: managed Postgres + 2 Docker web services + 1 static site); CI via GitHub Actions |
 
 ---
 
-## 6. Roadmap MVP (trong khuôn khổ 1 tháng hackathon)
+## 8. Guideline sources (evidence layer)
 
-1. **Onboarding & Data model**: thông tin ban đầu (ngày bị concussion, tuổi, giới tính, công việc, mức hoạt động) + Daily Check-in flow (đau đầu, chóng mặt, giấc ngủ, thời gian dùng máy tính/học/tập thể dục, tâm trạng...).
-2. **Recovery Intelligence**: phân tích lịch sử check-in → build Recovery Profile (Stage, Capacity, Trend, Buffer).
-3. **Scenario Simulation Engine**: nhập kế hoạch ngày mai → tính tải từng hoạt động, so với Recovery Capacity.
-4. **Recovery Planner**: khi phát hiện quá tải, sinh nhiều phương án điều chỉnh và hiển thị trade-off.
-5. **RAG evidence layer**: trả lời "Why?" bằng trích dẫn guideline y khoa (Amsterdam Consensus, CDC...).
-6. **Safety AI**: phát hiện red-flag symptoms → chặn khuyến nghị, yêu cầu gặp bác sĩ ngay.
-7. **LLM Orchestrator**: ghép kết quả tất cả module thành khuyến nghị dễ hiểu kèm độ tin cậy.
+| Audience | Source |
+|---|---|
+| Adult | Living Concussion Guidelines for Adults, 3rd Edition |
+| Pediatric | PedsConcussion Living Guideline |
+| Sport | Consensus statement on concussion in sport — 6th International Conference (Amsterdam 2022) |
+
+Full metadata (title, publisher, year, DOI, canonical URL, SHA-256) is in
+[`rag/data/raw_guidelines/sources.json`](rag/data/raw_guidelines/sources.json).
 
 ---
 
-## 6. Disclaimer
+## 9. Disclaimer
 
-Sản phẩm được xây dựng cho mục đích hackathon/demo. RE:ENTRY không phải là thiết bị y tế, không chẩn đoán bệnh, và không thay thế tư vấn/chăm sóc y tế chuyên nghiệp.
+This product was built for hackathon/demo purposes. RE:ENTRY is not a medical device, does not
+diagnose any condition, and does not replace professional medical advice or care.

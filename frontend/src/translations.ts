@@ -486,6 +486,7 @@ export const translations: Record<string, any> = {
 
       s3Title: "Bước 3: Thể chất",
       q8: "8. Chất lượng giấc ngủ đêm qua (0 = Tệ nhất, 5 = Tốt nhất)?",
+<<<<<<< HEAD
       q9: "9. Các triệu chứng có nặng hơn sau khi vận động hôm nay không?",
       q10: "10. Thời gian sử dụng màn hình hôm nay (0 = Không có, 5 = Rất nhiều)?",
 
@@ -493,6 +494,22 @@ export const translations: Record<string, any> = {
       q11: "11. Số giờ học tập/làm việc hôm nay (0 = Không có, 5 = Rất nhiều)?",
       q12: "12. Mức độ khó đọc hoặc tập trung hôm nay (0 = Không có, 5 = Nặng)?",
       q13: "13. Bạn đánh giá tâm trạng hôm nay thế nào (0 = Rất thấp, 5 = Rất tốt)?",
+=======
+      q9: "9. Hôm nay bạn có tập thể dục hoặc vận động thể chất không?",
+      q10: "10. Triệu chứng của bạn có nặng hơn sau khi vận động hôm nay không?",
+      yes: "Có",
+      no: "Không",
+
+      s4Title: "Bước 4: Tải nhận thức",
+      q11: "11. Thời gian dùng màn hình hôm nay (0 = Không, 5 = Rất nhiều)?",
+      q12: "12. Số giờ học tập/làm việc hôm nay (0 = Không, 5 = Rất nhiều)?",
+      q13: "13. Mức độ khó đọc hoặc tập trung hôm nay (0 = Không, 5 = Nặng)?",
+
+      s5Title: "Bước 5: Tâm trạng & Bối cảnh phục hồi",
+      q14: "14. Bạn đánh giá tâm trạng hôm nay thế nào (0 = Rất tệ, 5 = Rất tốt)?",
+      q15: "15. Mức độ hỗ trợ xã hội bạn có hiện tại (0 = Không có, 3 = Rất nhiều)?",
+      q16: "16. Hôm nay bạn cảm thấy quá tải hoặc căng thẳng đến mức nào (0 = Không, 5 = Nặng)?",
+>>>>>>> origin/main
     },
     // Results & Emergency
     results: {
