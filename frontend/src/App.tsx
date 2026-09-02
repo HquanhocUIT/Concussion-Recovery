@@ -588,13 +588,16 @@ const featureLabels: Record<string, Record<string, string>> = {
 
     setStepError('');
 
-    if (currentStep < 5) {
-      setCurrentStep(prev => prev + 1);
-
+    if (currentStep < 4) {
+      setCurrentStep(currentStep + 1);
       return;
     }
 
+    // Step 4 is the final step.
+    // Continue with analysis.
+
     setIsAnalyzing(true);
+    setIsCompleted(true);
     setIsSafetyBlocked(false);
     setRecommendationResult(null);
 
@@ -730,6 +733,7 @@ const featureLabels: Record<string, Record<string, string>> = {
       setAiResult(result);
       setRecommendationResult(trackBRecommendation);
       setIsSafetyBlocked(Boolean(viewModel.safetyBlocked));
+      setIsCompleted(true);
 
       /*
       * Safety / high concern
@@ -883,7 +887,7 @@ const featureLabels: Record<string, Record<string, string>> = {
   const renderConsentScreen = () => (
     <motion.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-      className={`relative backdrop-blur-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] dark:shadow-[0_16px_48px_rgba(0,0,0,0.2),inset_0_1px_2px_rgba(255,255,255,0.1)] rounded-[2rem] overflow-hidden p-8 md:p-12 max-w-3xl w-full mx-auto text-left ${
+      className={`relative backdrop-blur-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] dark:shadow-[0_16px_48px_rgba(0,0,0,0.2),inset_0_1px_2px_rgba(255,255,255,0.1)] rounded-[2rem] overflow-hidden p-6 md:p-8 max-w-2xl w-full mx-auto text-left ${
         isDarkMode 
           ? 'bg-slate-900/95 border-slate-700/50 text-white' 
           : 'bg-white/90 border-white/60 text-slate-900'
@@ -931,7 +935,7 @@ const featureLabels: Record<string, Record<string, string>> = {
     <motion.div
       key={language}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="relative w-full min-h-[100dvh] flex flex-col items-center justify-center overflow-hidden"
+      className="relative w-full min-h-[calc(100dvh-80px)] flex flex-col items-center justify-center overflow-hidden"
       style={{ background: 'none' }}
     >
       {/* Main Content - Centered */}
@@ -1369,7 +1373,7 @@ const featureLabels: Record<string, Record<string, string>> = {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
-        className="w-full min-h-[100vh] pt-32 pb-20 px-6 flex items-center justify-center relative z-10"
+        className="w-full min-h-[calc(100vh-80px)] pt-20 pb-12 px-6 flex items-center justify-center relative z-10"
       >
         <div className={`relative backdrop-blur-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] dark:shadow-[0_16px_48px_rgba(0,0,0,0.2),inset_0_1px_2px_rgba(255,255,255,0.1)] rounded-[2rem] overflow-hidden p-8 md:p-12 max-w-2xl w-full text-center ${
           isDarkMode
@@ -1394,7 +1398,7 @@ const featureLabels: Record<string, Record<string, string>> = {
   );
 
   const renderStepContent = () => {
-    const questionCardClass = `space-y-4 rounded-[2rem] p-6 border shadow-[0_8px_32px_0_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] ${isDarkMode ? 'bg-slate-900/60 border-white/10' : 'bg-white/20 backdrop-blur-3xl border-white/40'}`;
+    const questionCardClass = `space-y-3 rounded-[1.5rem] p-5 border shadow-[0_8px_32px_0_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] ${isDarkMode ? 'bg-slate-900/60 border-white/10' : 'bg-white/20 backdrop-blur-3xl border-white/40'}`;
     const questionLabelClass = `block text-base font-bold ${isDarkMode ? 'text-gray-200' : 'text-slate-800'}`;
     const textHintClass = `text-xs font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`;
     const inputClass = `w-full p-4 rounded-2xl border-2 focus:outline-none focus:ring-4 transition-all font-medium ${isDarkMode ? 'bg-[#0b132b]/60 border-white/15 text-white focus:border-blue-500 focus:ring-blue-500/20' : 'bg-white/90 border-slate-100 text-slate-700 focus:border-blue-500 focus:ring-blue-500/10'}`;
@@ -1515,82 +1519,187 @@ const featureLabels: Record<string, Record<string, string>> = {
         );
       case 3:
         return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-10">
-            <h2 className={`text-2xl font-extrabold mb-2 tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{t('questions.s3Title')}</h2>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-10"
+          >
+            <h2
+              className={`text-2xl font-extrabold mb-2 tracking-tight ${
+                isDarkMode ? 'text-white' : 'text-slate-900'
+              }`}
+            >
+              {t('questions.s3Title')}
+            </h2>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+              {/* Q8 */}
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q8')}</label>
-                <CustomSlider min={0} max={5} step={1} value={formData.sleep_quality} onChange={(v) => handleInputChange('sleep_quality', v)} ariaLabel="Sleep quality" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
+                <label className={questionLabelClass}>
+                  {t('questions.q8')}
+                </label>
+
+                <CustomSlider
+                  min={0}
+                  max={5}
+                  step={1}
+                  value={formData.sleep_quality}
+                  onChange={(v) =>
+                    handleInputChange('sleep_quality', v)
+                  }
+                  ariaLabel="Sleep quality"
+                />
+
+                <div className={`flex justify-between ${textHintClass}`}>
+                  <span>0</span>
+                  <span>5</span>
+                </div>
               </div>
+
+              {/* Q9 */}
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q9')}</label>
+                <label className={questionLabelClass}>
+                  {t('questions.q9')}
+                </label>
+
                 <div className="flex gap-4">
                   {[
                     { val: 'yes', label: t('questions.yes') },
                     { val: 'no', label: t('questions.no') }
-                  ].map(opt => (
-                    <button key={opt.val} onClick={() => handleInputChange('exercised_today', opt.val)} className={choiceButtonClass(formData.exercised_today === opt.val)}>{opt.label}</button>
+                  ].map((opt) => (
+                    <button
+                      key={opt.val}
+                      onClick={() =>
+                        handleInputChange(
+                          'symptoms_worsened_after_activity',
+                          opt.val
+                        )
+                      }
+                      className={choiceButtonClass(
+                        formData.symptoms_worsened_after_activity === opt.val
+                      )}
+                    >
+                      {opt.label}
+                    </button>
                   ))}
                 </div>
               </div>
+
+              {/* Q10 */}
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q10')}</label>
-                <div className="flex gap-4">
-                  {[
-                    { val: 'yes', label: t('questions.yes') },
-                    { val: 'no', label: t('questions.no') }
-                  ].map(opt => (
-                    <button key={opt.val} onClick={() => handleInputChange('symptoms_worsened_after_activity', opt.val)} className={choiceButtonClass(formData.symptoms_worsened_after_activity === opt.val)}>{opt.label}</button>
-                  ))}
+                <label className={questionLabelClass}>
+                  {t('questions.q10')}
+                </label>
+
+                <CustomSlider
+                  min={0}
+                  max={5}
+                  step={1}
+                  value={formData.screen_time}
+                  onChange={(v) =>
+                    handleInputChange('screen_time', v)
+                  }
+                  ariaLabel="Screen time"
+                />
+
+                <div className={`flex justify-between ${textHintClass}`}>
+                  <span>0</span>
+                  <span>5</span>
                 </div>
               </div>
+
             </div>
           </motion.div>
         );
       case 4:
         return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-10">
-            <h2 className={`text-2xl font-extrabold mb-2 tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{t('questions.s4Title')}</h2>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-10"
+          >
+            <h2
+              className={`text-2xl font-extrabold mb-2 tracking-tight ${
+                isDarkMode ? 'text-white' : 'text-slate-900'
+              }`}
+            >
+              {t('questions.s4Title')}
+            </h2>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+              {/* Q11 */}
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q11')}</label>
-                <CustomSlider min={0} max={5} step={1} value={formData.screen_time} onChange={(v) => handleInputChange('screen_time', v)} ariaLabel="Screen time" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
+                <label className={questionLabelClass}>
+                  {t('questions.q11')}
+                </label>
+
+                <CustomSlider
+                  min={0}
+                  max={5}
+                  step={1}
+                  value={formData.study_work_hours}
+                  onChange={(v) =>
+                    handleInputChange('study_work_hours', v)
+                  }
+                  ariaLabel="Study or work hours"
+                />
+
+                <div className={`flex justify-between ${textHintClass}`}>
+                  <span>0</span>
+                  <span>5</span>
+                </div>
               </div>
+
+              {/* Q12 */}
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q12')}</label>
-                <CustomSlider min={0} max={5} step={1} value={formData.study_work_hours} onChange={(v) => handleInputChange('study_work_hours', v)} ariaLabel="Study or work hours" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
+                <label className={questionLabelClass}>
+                  {t('questions.q12')}
+                </label>
+
+                <CustomSlider
+                  min={0}
+                  max={5}
+                  step={1}
+                  value={formData.concentration_difficulty}
+                  onChange={(v) =>
+                    handleInputChange('concentration_difficulty', v)
+                  }
+                  ariaLabel="Concentration difficulty"
+                />
+
+                <div className={`flex justify-between ${textHintClass}`}>
+                  <span>0</span>
+                  <span>5</span>
+                </div>
               </div>
+
+              {/* Q13 */}
               <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q13')}</label>
-                <CustomSlider min={0} max={5} step={1} value={formData.concentration_difficulty} onChange={(v) => handleInputChange('concentration_difficulty', v)} ariaLabel="Concentration difficulty" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
+                <label className={questionLabelClass}>
+                  {t('questions.q13')}
+                </label>
+
+                <CustomSlider
+                  min={0}
+                  max={5}
+                  step={1}
+                  value={formData.mood}
+                  onChange={(v) =>
+                    handleInputChange('mood', v)
+                  }
+                  ariaLabel="Mood today"
+                />
+
+                <div className={`flex justify-between ${textHintClass}`}>
+                  <span>0</span>
+                  <span>5</span>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        );
-      case 5:
-        return (
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-10">
-            <h2 className={`text-2xl font-extrabold mb-2 tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{t('questions.s5Title')}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q14')}</label>
-                <CustomSlider min={0} max={5} step={1} value={formData.mood} onChange={(v) => handleInputChange('mood', v)} ariaLabel="Mood today" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
-              </div>
-              <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q15')}</label>
-                <CustomSlider min={0} max={3} step={1} value={formData.social_support} onChange={(v) => handleInputChange('social_support', v)} ariaLabel="Social support" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>3</span></div>
-              </div>
-              <div className={questionCardClass}>
-                <label className={questionLabelClass}>{t('questions.q16')}</label>
-                <CustomSlider min={0} max={5} step={1} value={formData.overwhelm_level} onChange={(v) => handleInputChange('overwhelm_level', v)} ariaLabel="Stress or overwhelm level" />
-                <div className={`flex justify-between ${textHintClass}`}><span>0</span><span>5</span></div>
-              </div>
+
             </div>
           </motion.div>
         );
@@ -2845,8 +2954,8 @@ const featureLabels: Record<string, Record<string, string>> = {
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         {isDarkMode ? (
           <>
-            <div className="absolute top-[-15%] left-[-10%] w-[55vw] h-[55vw] rounded-full filter blur-[120px] opacity-30 animate-blob bg-indigo-700" />
-<div className="absolute top-[40%] left-[40%] w-[40vw] h-[40vw] rounded-full filter blur-[100px] opacity-15 animate-blob animation-delay-4000 bg-blue-900" />            <div className="absolute top-[40%] left-[40%] w-[40vw] h-[40vw] rounded-full filter blur-[100px] opacity-15 animate-blob animation-delay-4000 bg-blue-900" />
+            <div className="absolute top-[-15%] left-[-10%] w-[42vw] h-[42vw] rounded-full filter blur-[100px] opacity-30 animate-blob bg-indigo-700" />
+            <div className="absolute top-[40%] left-[40%] w-[40vw] h-[40vw] rounded-full filter blur-[100px] opacity-15 animate-blob animation-delay-4000 bg-blue-900" />
           </>
         ) : (
           <>
@@ -3193,7 +3302,7 @@ const featureLabels: Record<string, Record<string, string>> = {
             transition={{ duration: 0.3 }}
           >
             {/* Hero Section — Left-aligned layout in light mode, space theme in dark mode */}
-            <section className="relative w-full overflow-hidden" style={{ minHeight: '100vh' }}>
+            <section className="relative w-full overflow-hidden" style={{ minHeight: 'calc(100vh - 80px)' }}>
               {/* Starfield overlay (Only visible in dark mode) */}
               <div className={`absolute inset-0 z-0 transition-opacity duration-700 ${isDarkMode ? 'opacity-100' : 'opacity-0'}`}>
                 {/* Background Space Gradient */}
@@ -3225,10 +3334,13 @@ const featureLabels: Record<string, Record<string, string>> = {
                   {/* Earth Background — centered */}
                   <div className="absolute inset-0 z-[5] flex items-center justify-center pointer-events-none overflow-hidden">
                     <motion.div
-                      initial={{ opacity: 0, scale: 0.8, y: 100 }}
-                      animate={{ opacity: 0.9, scale: 1, y: -80 }}
-                      transition={{ duration: 1.5, ease: "easeOut" }}
-                      style={{ width: '100vw', maxWidth: '960px', minWidth: '720px', aspectRatio: '1/1' }}
+                      initial={{ opacity: 0, scale: 0.85, y: 60 }}
+                      animate={{ opacity: 0.85, scale: 1, y: -20 }}
+                      transition={{ duration: 1.2, ease: "easeOut" }}
+                      style={{
+                        width: 'min(48vw, 500px)',
+                        aspectRatio: '1 / 1'
+                      }}
                     >
                       <motion.img
                         src="https://i.pinimg.com/736x/b5/fc/cf/b5fccf011c833f5b05d90c1d909191c5.jpg"
@@ -3245,7 +3357,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                   {/* Bottom gradient */}
                   <div className="absolute bottom-0 left-0 w-full h-[30vh] bg-gradient-to-t from-[#0B0F19] via-[#0B0F19]/90 to-transparent z-[2] pointer-events-none" />
                   {/* Dark mode content — centered */}
-                  <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 pt-32 pb-80 md:pb-96" style={{ minHeight: '100vh' }}>
+                  <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 py-10 md:py-14 min-h-[calc(100vh-80px)]">
                     <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-widest mb-8 border bg-white/8 border-white/15 text-white/90 backdrop-blur-md"
                     >
@@ -3254,18 +3366,23 @@ const featureLabels: Record<string, Record<string, string>> = {
                     </motion.div>
                     <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.1 }}
                       className="font-extrabold tracking-tight leading-[1.08] mb-6 text-white"
-                      style={{ fontSize: 'clamp(2.4rem, 6vw, 5.5rem)', maxWidth: '800px' }}
+                      style={{
+                        fontSize: 'clamp(2.2rem, 4.5vw, 4rem)',
+                        width: 'min(92vw, 760px)',
+                        maxWidth: '760px',
+                        textWrap: 'balance'
+                      }}
                     >
                       {t('hero.title1')}{' '}
                       <span className="text-[#a3e635]">{t('hero.title2')}</span>
                     </motion.h1>
                     <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.2 }}
-                      className="text-base md:text-lg leading-relaxed mb-10 max-w-xl text-white/70"
+                      className="text-sm md:text-base leading-relaxed mb-7 max-w-lg text-white/70"
                     >
                       {t('hero.subtitle')}
                     </motion.p>
                     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.3 }}
-                      className="flex flex-wrap items-center justify-center gap-4 mb-12"
+                      className="flex flex-wrap items-center justify-center gap-3 mb-8"
                     >
                       <button onClick={() => setIsSurveyOpen(true)}
                         className="relative overflow-hidden group flex items-center gap-2 px-8 py-3.5 rounded-full font-semibold bg-[#a3e635] text-black shadow-[0_8px_32px_rgba(163,230,53,0.35)] hover:shadow-[0_8px_32px_0_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(255,255,255,1)] transition-all duration-300"
@@ -3296,25 +3413,25 @@ const featureLabels: Record<string, Record<string, string>> = {
                 </>
               ) : (
                 /* ========== LIGHT MODE: Glassmorphism overlap layout ========== */
-                <div className="relative z-10 container mx-auto px-6 flex flex-col justify-center min-h-screen pt-28 pb-16">
+                <div className="relative z-10 container mx-auto px-6 flex flex-col justify-center min-h-[calc(100vh-80px)] pt-24 pb-12">
 
                   {/* Background Globe - Absolute positioned behind all content */}
-                  <div className="absolute top-1/2 right-[-20%] md:right-[-10%] lg:right-[0%] -translate-y-1/2 w-[600px] h-[600px] lg:w-[900px] lg:h-[900px] pointer-events-none" style={{ zIndex: -10 }}>
+                  <div className="absolute top-1/2 right-[-4%] md:right-[-2%] lg:right-[1%] -translate-y-1/2 w-[390px] h-[390px] md:w-[500px] md:h-[500px] lg:w-[620px] lg:h-[620px] pointer-events-none">
                     <motion.div
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
+                      initial={{ opacity: 0, scale: 0.85 }}
+                      animate={{ opacity: 1, scale: 1.05 }}
                       transition={{ duration: 1.5, ease: "easeOut" }}
                       className="w-full h-full relative"
                     >
-                      <motion.div
-                        className="w-full h-full"
-                        style={{
-                          backgroundImage: 'url(https://image2url.com/r2/default/images/1775833042260-9b4ddd91-fea4-4bd9-acfb-ee4c62c41c64.png)',
-                          backgroundSize: '100%',
-                          backgroundPosition: 'center',
-                          backgroundRepeat: 'no-repeat',
-                          opacity: 0.9
-                        }}
+                      <motion.img
+                        src={
+                          language === 'en'
+                            ? '/images/hero-illustration-en.png'
+                            : '/images/hero-illustration-vi.png'
+                        }
+                        alt="RE:ENTRY recovery illustration"
+                        className="w-full h-full object-contain"
+                        draggable={false}
                       />
                       {/* Falling flowers */}
                       {[...Array(8)].map((_, i) => (
@@ -3330,7 +3447,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                             boxShadow: `0 0 ${Math.random() * 8 + 4}px rgba(255, 235, 59, ${Math.random() * 0.5 + 0.4})`
                           }}
                           animate={{
-                            y: ['-20px', '600px'],
+                            y: ['-20px', '480px'],
                             x: [`${Math.random() * 100 - 50}px`, `${Math.random() * 100 - 50}px`],
                             opacity: [0, 0.95, 0]
                           }}
@@ -3357,7 +3474,8 @@ const featureLabels: Record<string, Record<string, string>> = {
                     {/* Headline */}
                     <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.1 }}
                       className="font-extrabold tracking-tight leading-[1.1] mb-6 text-slate-900"
-                      style={{ fontSize: 'clamp(2.5rem, 5.5vw, 4.5rem)' }}
+                      style={{ fontSize: 'clamp(2.25rem, 4.5vw, 3.75rem)' }}
+                      
                     >
                       {t('hero.title1')}<br />
                       <span className="text-[#0f172a]">{t('hero.title2')}</span>
@@ -3365,7 +3483,7 @@ const featureLabels: Record<string, Record<string, string>> = {
 
                     {/* Subtitle — highly blurred frosted glass card */}
                     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.2 }}
-                      className="bg-white/20 backdrop-blur-3xl border border-white/60 rounded-3xl p-6 sm:p-8 mb-10 shadow-[0_8px_32px_rgba(255,255,255,0.3)] max-w-xl relative overflow-hidden"
+                      className="bg-white/20 backdrop-blur-3xl border border-white/60 rounded-3xl p-6 sm:p-8 mb-8 shadow-[0_8px_32px_rgba(255,255,255,0.3)] max-w-xl relative overflow-hidden"
                     >
                       <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-white/10" />
                       <p className="relative z-10 text-base sm:text-lg leading-relaxed text-slate-800 font-medium">
@@ -3462,22 +3580,22 @@ const featureLabels: Record<string, Record<string, string>> = {
             key="survey"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.4 }}
-            className={`container mx-auto px-6 min-h-[100dvh] flex flex-col w-full ${isCompleted ? 'items-stretch justify-start pt-24 pb-12 max-w-[1360px]' : 'items-center justify-center py-24 max-w-3xl'}`}
+            className={`container mx-auto px-6 min-h-[100dvh] flex flex-col w-full ${isCompleted ? 'items-stretch justify-start pt-24 pb-12 max-w-[1360px]' : 'items-center justify-center py-16 max-w-2xl'}`}
           >
             {!isCompleted ? (
-              <div className={`relative rounded-[2rem] overflow-visible p-8 md:p-12 border shadow-[0_8px_32px_0_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] ${isDarkMode ? 'bg-slate-900/80 border-white/10' : 'bg-white/20 backdrop-blur-3xl border-white/40'}`}>
+              <div className={`relative rounded-[2rem] overflow-visible p-6 md:p-8 border shadow-[0_8px_32px_0_rgba(0,0,0,0.05),inset_0_1px_2px_rgba(255,255,255,0.8)] ${isDarkMode ? 'bg-slate-900/80 border-white/10' : 'bg-white/20 backdrop-blur-3xl border-white/40'}`}>
                 
                 {/* Progress Bar */}
                 <div className="mb-12">
                   <div className={`flex justify-between text-sm font-bold mb-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    <span>{t('survey.step')} {currentStep} / 5</span>
-                    <span className={isDarkMode ? 'text-blue-400' : 'text-blue-600'}>{Math.round((currentStep / 5) * 100)}% {t('survey.completed')}</span>
+                    <span>{t('survey.step')} {currentStep} / 4</span>
+                    <span className={isDarkMode ? 'text-blue-400' : 'text-blue-600'}>{Math.round((currentStep / 4) * 100)}% {t('survey.completed')}</span>
                   </div>
                   <div className={`w-full h-3 rounded-full overflow-hidden shadow-inner ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
                     <motion.div
                       className="h-full bg-gradient-to-r from-blue-500 to-teal-400 rounded-full relative"
-                      initial={{ width: `${((currentStep - 1) / 5) * 100}%` }}
-                      animate={{ width: `${(currentStep / 5) * 100}%` }}
+                      initial={{ width: `${((currentStep - 1) / 4) * 100}%` }}
+                      animate={{ width: `${(currentStep / 4) * 100}%` }}
                       transition={{ duration: 0.5, ease: 'easeOut' }}
                     >
                       <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]" />
@@ -3509,11 +3627,11 @@ const featureLabels: Record<string, Record<string, string>> = {
                   </button>
                   <button
                     onClick={nextStep}
-                    aria-label={currentStep === 5 ? t('survey.btnSubmit') : t('survey.btnNext')}
+                    aria-label={currentStep === 4 ? t('survey.btnSubmit') : t('survey.btnNext')}
                     className={`relative overflow-hidden group rounded-full font-semibold px-8 py-3 transition-all duration-300 flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 hover:-translate-y-0.5 ${isDarkMode ? 'bg-blue-600/30 text-blue-100 border border-blue-500/40 hover:bg-blue-600/40 focus:ring-blue-400 focus:ring-offset-[#0b132b]' : 'bg-white/30 backdrop-blur-2xl text-blue-700 border border-white/50 hover:bg-white/40 hover:shadow-[0_8px_32px_0_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(255,255,255,1)] focus:ring-blue-600 focus:ring-offset-white'}`}
                   >
                     <div className="absolute inset-0 -translate-x-full group-hover:animate-shimmer bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                    {currentStep === 5 ? t('survey.btnSubmit') : t('survey.btnNext')} <ArrowRight className="w-5 h-5" aria-hidden="true" />
+                    {currentStep === 4 ? t('survey.btnSubmit') : t('survey.btnNext')} <ArrowRight className="w-5 h-5" aria-hidden="true" />
                   </button>
                 </div>
               </div>
