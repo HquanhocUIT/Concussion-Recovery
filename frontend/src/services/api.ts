@@ -300,7 +300,9 @@ export function createCheckin(payload: CheckinCreate): Promise<CheckinResponse> 
 export function getCheckins(
   userId: string
 ): Promise<CheckinListItem[]> {
-  return request<CheckinListItem[]>(`/checkins/${userId}`);
+  return request<CheckinListItem[]>(
+    `/check-ins?user_id=${encodeURIComponent(userId)}`
+  );
 }
 
 /** GET /recovery/profile/{user_id} */
