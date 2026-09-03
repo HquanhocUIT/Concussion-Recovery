@@ -249,7 +249,9 @@ const buildActivitiesFromSurvey = (
     });
   }
 
-  if (formData.exercised_today === 'yes') {
+  // The 4-step survey no longer asks whether the patient exercised, so the
+  // only remaining activity signal is whether symptoms worsened afterwards.
+  if (formData.symptoms_worsened_after_activity === 'yes') {
     activities.push({
       activity_id: 'light_exercise',
       duration_minutes: DEFAULT_LIGHT_EXERCISE_MINUTES,
@@ -1803,7 +1805,6 @@ const featureLabels: Record<string, Record<string, string>> = {
 
       const sq = safeNum(formData.sleep_quality, 0);
       const hc = safeNum(formData.headache, 0);
-      const ss = safeNum(formData.social_support, 0);
       const st = safeNum(formData.screen_time, 0);
       const mo = safeNum(formData.mood, 0);
 
@@ -1823,14 +1824,6 @@ const featureLabels: Record<string, Record<string, string>> = {
           unit: '/5',
           youPct: Math.min(100, Math.round((hc / 5) * 100)),
           avgPct: 40,
-        },
-        {
-          label: getFeatureLabel('social_support'),
-          you: ss,
-          avg: 2,
-          unit: '/3',
-          youPct: Math.min(100, Math.round((ss / 3) * 100)),
-          avgPct: 65,
         },
         {
           label: getFeatureLabel('screen_time'),
@@ -2768,8 +2761,6 @@ const featureLabels: Record<string, Record<string, string>> = {
     const visionScore = Number(data.blurred_vision);
     const nauseaScore = Number(data.nausea);
     const moodScore = Number(data.mood);
-    const supportScore = Number(data.social_support);
-    const overwhelmScore = Number(data.overwhelm_level);
     const concentrationScore = Number(data.concentration_difficulty);
     const symptomScore = Math.max(headacheScore, dizzinessScore, visionScore, nauseaScore);
 
@@ -2788,20 +2779,11 @@ const featureLabels: Record<string, Record<string, string>> = {
     if (moodScore <= 2) {
       addTemplate('auto-mood', 'mental', 'results.actionCards.moodTitle', 'results.actionCards.moodDesc', { score: moodScore });
     }
-    if (supportScore <= 1) {
-      addTemplate('auto-support', 'social', 'results.actionCards.supportTitle', 'results.actionCards.supportDesc', { score: supportScore });
-    }
     if (data.symptoms_worsened_after_activity === 'yes') {
-      addTemplate('auto-peer-pressure', 'social', 'results.actionCards.peerTitle', 'results.actionCards.peerDesc', { score: overwhelmScore });
+      addTemplate('auto-peer-pressure', 'social', 'results.actionCards.peerTitle', 'results.actionCards.peerDesc', { score: symptomScore });
     }
     if (studyWorkScore >= 4) {
       addTemplate('auto-bullying', 'social', 'results.actionCards.bullyingTitle', 'results.actionCards.bullyingDesc', { score: studyWorkScore });
-    }
-    if (data.exercised_today === 'no') {
-      addTemplate('auto-activity', 'exercise', 'results.actionCards.activityTitle', 'results.actionCards.activityDesc', { score: 0 });
-    }
-    if (overwhelmScore >= 3) {
-      addTemplate('auto-needs', 'finance', 'results.actionCards.needsTitle', 'results.actionCards.needsDesc', { score: overwhelmScore });
     }
     if (symptomScore >= 3) {
       addTemplate('auto-relief', 'mental', 'results.actionCards.reliefTitle', 'results.actionCards.reliefDesc', { score: symptomScore });

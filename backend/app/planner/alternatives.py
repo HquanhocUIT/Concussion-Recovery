@@ -137,7 +137,12 @@ def generate_alternatives(
                 activities=plan,
                 postponed_activity=postponed,
                 modeled_demand=modeled_demand,
-                improvement_score=_improvement(original=original_demand, alternative=modeled_demand, original_activities=activities, alternative_activities=plan,),
+                improvement_score=_improvement(
+                    original=original_demand,
+                    alternative=modeled_demand,
+                    original_activities=activities,
+                    alternative_activities=plan,
+                ),
             )
         )
     return alternatives
