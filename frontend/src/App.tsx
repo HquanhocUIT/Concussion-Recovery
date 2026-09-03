@@ -274,10 +274,14 @@ export default function App() {
     setSimulationHistory
   ] = useState<SimulationHistoryItem[]>([]);
   const [showMotivational, setShowMotivational] = useState(false);
-  const [language, setLanguage] = useState<'vi' | 'en'>(() => (localStorage.getItem('concussionrecovery_language') as any) || 'en');
+  // The app ships in English only. The guideline corpus and the embedding
+  // model behind the chat assistant are both English-only, so Vietnamese
+  // questions scored far below the retrieval threshold and returned no
+  // evidence. Keeping one language avoids presenting a feature that
+  // silently fails.
+  const language = 'en' as const;
   const [activeDemoUserId, setActiveDemoUserId] = useState<DemoPersonaId>(DEFAULT_DEMO_PERSONA_ID);
   const [recoveryProfile, setRecoveryProfile] = useState<Awaited<ReturnType<typeof getRecoveryProfile>> | null>(null);
-  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [isSurveyOpen, setIsSurveyOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [isCompleted, setIsCompleted] = useState(false);
@@ -345,17 +349,10 @@ export default function App() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
   const radarRef = useRef<HTMLDivElement>(null);
-  const languageMenuRef = useRef<HTMLDivElement>(null);
-
-  const languageOptions = [
-    { code: 'en', label: 'English', flag: 'gb' },
-    { code: 'vi', label: 'Tiếng Việt', flag: 'vn' }
-  ] as const;
 
   useEffect(() => {
     document.documentElement.lang = language;
-    localStorage.setItem('concussionrecovery_language', language);
-  }, [language]);
+  }, []);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -375,62 +372,36 @@ export default function App() {
     }
   }, [showEmergencyModal]);
 
-  useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (languageMenuRef.current && !languageMenuRef.current.contains(event.target as Node)) {
-        setIsLanguageMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
-
-  // Tự động cuộn lên đầu trang khi chuyển đổi các trạng thái xem chính hoặc bước khảo sát
+  // Scroll back to the top when the main view or survey step changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [isSurveyOpen, isAboutUsOpen, isCompleted, currentStep, activeDataModule]);
 
   // Translation helper
   const t = (key: string): any => {
-    const keys = key.split('.');
-    let result: any = translations[language];
-    for (const k of keys) {
-      if (result && Object.prototype.hasOwnProperty.call(result, k)) {
-        result = result[k];
-      } else {
-        let fallback: any = translations.en;
-        for (const fk of keys) {
-          if (fallback && Object.prototype.hasOwnProperty.call(fallback, fk)) {
-            fallback = fallback[fk];
-          } else {
-            return key;
-          }
-        }
-        return typeof fallback === 'string' ? fallback : key;
+    let result: any = translations.en;
+    for (const k of key.split('.')) {
+      if (!result || !Object.prototype.hasOwnProperty.call(result, k)) {
+        return key;
       }
+      result = result[k];
     }
     return (typeof result === 'string' || Array.isArray(result)) ? result : key;
   };
 const featureLabels: Record<string, Record<string, string>> = {
-    headache:                   { vi: 'Đau đầu',                 en: 'Headache' },
-    dizziness:                  { vi: 'Chóng mặt',               en: 'Dizziness' },
-    blurred_vision:             { vi: 'Mờ mắt',                  en: 'Blurred Vision' },
-    nausea:                     { vi: 'Buồn nôn',                en: 'Nausea' },
-    sleep_quality:              { vi: 'Chất lượng giấc ngủ',     en: 'Sleep Quality' },
-    screen_time:                { vi: 'Thời gian dùng màn hình', en: 'Screen Time' },
-    cognitive_load:             { vi: 'Tải nhận thức',           en: 'Cognitive Load' },
-    concentration_difficulty:   { vi: 'Khó tập trung',           en: 'Concentration Difficulty' },
-    mood:                       { vi: 'Tâm trạng',               en: 'Mood' },
-    social_support:             { vi: 'Hỗ trợ xã hội',          en: 'Social Support' },
-    overwhelm_level:            { vi: 'Mức độ căng thẳng',       en: 'Overwhelm Level' },
+    headache:                   { en: 'Headache' },
+    dizziness:                  { en: 'Dizziness' },
+    blurred_vision:             { en: 'Blurred Vision' },
+    nausea:                     { en: 'Nausea' },
+    sleep_quality:              { en: 'Sleep Quality' },
+    screen_time:                { en: 'Screen Time' },
+    cognitive_load:             { en: 'Cognitive Load' },
+    concentration_difficulty:   { en: 'Concentration Difficulty' },
+    mood:                       { en: 'Mood' },
+    social_support:             { en: 'Social Support' },
+    overwhelm_level:            { en: 'Overwhelm Level' },
   };
-  const getFeatureLabel = (keyObj: string) => {
-    if (featureLabels[keyObj]) {
-      return (featureLabels[keyObj] as any)[language] || keyObj;
-    }
-    return keyObj;
-  };
+  const getFeatureLabel = (keyObj: string) => featureLabels[keyObj]?.en || keyObj;
 
   const formatTemplate = (template: string, vars: Record<string, string | number>) =>
     template.replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? ''));
@@ -507,7 +478,7 @@ const featureLabels: Record<string, Record<string, string>> = {
   };
 
   // Format a stored ISO date string (YYYY-MM-DD) using the current locale
-  const localeMap: Record<string, string> = { vi: 'vi-VN', en: 'en-US' };
+  const localeMap: Record<string, string> = { en: 'en-US' };
   const formatSessionDate = (dateStr: string): string => {
     const d = new Date(dateStr + 'T00:00:00'); // avoid UTC offset shifts
     if (isNaN(d.getTime())) return dateStr;    // fallback for legacy entries
@@ -525,11 +496,11 @@ const featureLabels: Record<string, Record<string, string>> = {
   };
 
   const acceptConsent = () => {
-    setShowMotivational(true); // Hiển thị trang motivational
+    setShowMotivational(true); // Show the motivational screen
   };
 
   const proceedToSurvey = () => {
-    setHasConsented(true); // Đánh dấu đã đọc đầy đủ
+    setHasConsented(true); // Mark the consent text as fully read
     setShowMotivational(false);
   };
 
@@ -817,9 +788,7 @@ const featureLabels: Record<string, Record<string, string>> = {
     } catch (error) {
       console.error('Unable to simulate alternative:', error);
       setStepError(
-        language === 'vi'
-          ? 'Không thể mô phỏng phương án này. Hãy kiểm tra backend và thử lại.'
-          : 'Unable to simulate this alternative. Check the backend and try again.',
+        'Unable to simulate this alternative. Check the backend and try again.',
       );
     } finally {
       setIsResimulatingAlternative(false);
@@ -833,7 +802,7 @@ const featureLabels: Record<string, Record<string, string>> = {
     return `hsl(${hue}, 84%, 50%)`;
   };
 
-  // CustomSlider: showDots = true (default) để hiện dấu chấm, false để ẩn
+  // CustomSlider: showDots = true (default) shows the tick dots, false hides them
   const CustomSlider = ({ min, max, step, value, onChange, size = 'normal', ariaLabel, showDots = true }: { min: number, max: number, step: number, value: number, onChange: (val: number) => void, size?: 'normal' | 'large', ariaLabel: string, showDots?: boolean }) => {
     const snapPoints = [];
     for (let i = min; i <= max; i += 1) snapPoints.push(i);
@@ -864,7 +833,7 @@ const featureLabels: Record<string, Record<string, string>> = {
             style={{ borderTopColor: currentColor }}
           ></div>
         </div>
-        {/* Dấu chấm tròn các mốc nhỏ nằm đè trên track */}
+        {/* Tick dots overlaid on the track */}
 
         <input
           type="range"
@@ -1191,7 +1160,7 @@ const featureLabels: Record<string, Record<string, string>> = {
               </a>
             </div>
 
-            <div className={`text-sm mb-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} dangerouslySetInnerHTML={{ __html: t('emergency.clinic').replace('Phòng Tư vấn Tâm lý', '<strong>Phòng Tư vấn Tâm lý</strong>').replace('University Counseling Center', '<strong>University Counseling Center</strong>') }} />
+            <div className={`text-sm mb-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} dangerouslySetInnerHTML={{ __html: t('emergency.clinic').replace('University Counseling Center', '<strong>University Counseling Center</strong>') }} />
 
             <button
               onClick={() => setShowEmergencyModal(false)}
@@ -1217,21 +1186,21 @@ const featureLabels: Record<string, Record<string, string>> = {
               isDarkMode ? 'bg-slate-900/90 border border-white/10 text-white' : 'bg-white/95 border border-slate-200 text-slate-900'
             }`}
           >
-            <h3 className="text-2xl font-bold mb-4">Lợi ích khi Đăng nhập</h3>
+            <h3 className="text-2xl font-bold mb-4">Why sign in</h3>
             <div className={`text-left space-y-4 mb-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-              <p className="font-medium text-center opacity-90">Đăng nhập để mở khóa các tính năng nâng cao giúp bạn quản lý sức khỏe tốt hơn:</p>
+              <p className="font-medium text-center opacity-90">Sign in to unlock features that help you manage your recovery:</p>
               <ul className="space-y-4 text-sm">
                 <li className="flex items-start gap-3">
                   <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                  <span><strong>Theo dõi lịch sử:</strong> Xem lại lịch sử làm khảo sát và theo dõi biểu đồ xu hướng căng thẳng qua từng mốc thời gian.</span>
+                  <span><strong>Check-in history:</strong> Revisit past check-ins and follow your trend charts over time.</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                  <span><strong>AI Cá nhân hóa:</strong> Hệ thống ghi nhớ thói quen sinh hoạt để đưa ra gợi ý và lộ trình phục hồi chính xác hơn.</span>
+                  <span><strong>Personalised planning:</strong> Saved routines let the system model your recovery plan more precisely.</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                  <span><strong>Gợi ý thông minh:</strong> Nhận các chỉ dẫn tốt hơn cho các vấn đề tâm lý dựa trên dữ liệu thói quen đã lưu trữ.</span>
+                  <span><strong>Better guidance:</strong> Recommendations draw on the check-in data you have stored.</span>
                 </li>
               </ul>
             </div>
@@ -1240,7 +1209,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                 onClick={handleConfirmLogin}
                 className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30"
               >
-                Tiếp tục đăng nhập
+                Continue to sign in
               </button>
               <button
                 onClick={handleCancelLogin}
@@ -1248,7 +1217,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                   isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Để sau
+                Later
               </button>
             </div>
           </motion.div>
@@ -1271,7 +1240,7 @@ const featureLabels: Record<string, Record<string, string>> = {
             className={`relative max-w-lg w-full rounded-[2.5rem] p-8 md:p-10 shadow-2xl ${isDarkMode ? 'bg-slate-900 border border-white/10' : 'bg-white border border-slate-100'}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <button aria-label={language === 'vi' ? 'Đóng giải thích' : 'Close explanation'} onClick={() => setSelectedActionDetail(null)} className="absolute top-5 right-5 flex h-11 w-11 items-center justify-center rounded-full hover:bg-slate-100 focus:ring-2 focus:ring-blue-500 dark:hover:bg-white/10 transition-colors">
+            <button aria-label={'Close explanation'} onClick={() => setSelectedActionDetail(null)} className="absolute top-5 right-5 flex h-11 w-11 items-center justify-center rounded-full hover:bg-slate-100 focus:ring-2 focus:ring-blue-500 dark:hover:bg-white/10 transition-colors">
               <X className="w-5 h-5" aria-hidden="true" />
             </button>
             
@@ -1294,7 +1263,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                 {selectedActionDetail.tradeoff && (
                   <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-amber-400/30 bg-amber-400/10' : 'border-amber-200 bg-amber-50'}`}>
                     <h4 className={`mb-1 text-sm font-bold ${isDarkMode ? 'text-amber-200' : 'text-amber-900'}`}>
-                      {language === 'vi' ? 'Điểm đánh đổi' : 'Trade-off'}
+                      {'Trade-off'}
                     </h4>
                     <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
                       {selectedActionDetail.tradeoff}
@@ -1304,7 +1273,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                 <div>
                   <h4 className={`mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
                     <BookOpen className="h-4 w-4" aria-hidden="true" />
-                    {language === 'vi' ? 'Bằng chứng hướng dẫn' : 'Guideline evidence'}
+                    {'Guideline evidence'}
                   </h4>
                   {selectedActionDetail.evidence.length ? (
                     <ul className="space-y-3">
@@ -1326,9 +1295,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                     </ul>
                   ) : (
                     <p className={`rounded-xl border p-4 text-sm ${isDarkMode ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-600'}`}>
-                      {language === 'vi'
-                        ? 'Không truy xuất được nguồn hướng dẫn cho phương án này; hệ thống không đưa ra tuyên bố bằng chứng y khoa.'
-                        : 'No guideline source was retrieved for this option, so no clinical-evidence claim is shown.'}
+                      {'No guideline source was retrieved for this option, so no clinical-evidence claim is shown.'}
                     </p>
                   )}
                 </div>
@@ -1341,15 +1308,15 @@ const featureLabels: Record<string, Record<string, string>> = {
                   >
                     <Play className="h-4 w-4" aria-hidden="true" />
                     {isResimulatingAlternative
-                      ? (language === 'vi' ? 'Đang mô phỏng...' : 'Simulating...')
-                      : (language === 'vi' ? 'Mô phỏng phương án này' : 'Simulate this alternative')}
+                      ? ('Simulating...')
+                      : ('Simulate this alternative')}
                   </button>
                 )}
               </div>
             ) : (
               <div className="space-y-4">
                 <h4 className={`text-sm font-bold uppercase tracking-widest ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                  Các bước thực hiện:
+                  Steps to take:
                 </h4>
                 <ul className="space-y-4">
                   {(Array.isArray(t(`results.actionCards.${selectedActionDetail.id.replace('backend-','').replace('auto-','')}.steps`)) ? t(`results.actionCards.${selectedActionDetail.id.replace('backend-','').replace('auto-','')}.steps`) : [t('ui.noStepsAvailable')]).map((step: string, i: number) => (
@@ -1475,28 +1442,24 @@ const featureLabels: Record<string, Record<string, string>> = {
 
             <fieldset className={`rounded-[2rem] border p-6 ${isDarkMode ? 'border-red-400/30 bg-red-950/20' : 'border-red-200 bg-red-50/80'}`}>
               <legend className={`px-2 text-base font-extrabold ${isDarkMode ? 'text-red-200' : 'text-red-900'}`}>
-                {language === 'vi' ? 'Kiểm tra dấu hiệu cần chăm sóc khẩn cấp' : 'Check for symptoms needing urgent care'}
+                {'Check for symptoms needing urgent care'}
               </legend>
               <p className={`mb-4 text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                {language === 'vi'
-                  ? 'Chỉ chọn những dấu hiệu bạn đang thực sự gặp. Nếu có, hệ thống sẽ dừng khuyến nghị kế hoạch và hiển thị hướng dẫn tìm chăm sóc y tế.'
-                  : 'Select only symptoms you are actually experiencing. If any apply, planning recommendations stop and urgent-care guidance is shown.'}
+                {'Select only symptoms you are actually experiencing. If any apply, planning recommendations stop and urgent-care guidance is shown.'}
               </p>
               <div className="grid grid-cols-1 gap-3">
                 {[
                   {
                     key: 'worsening_headache' as const,
-                    label: language === 'vi' ? 'Đau đầu đang nặng dần' : 'A headache that is getting worse',
+                    label: 'A headache that is getting worse',
                   },
                   {
                     key: 'repeated_vomiting' as const,
-                    label: language === 'vi' ? 'Nôn nhiều lần' : 'Repeated vomiting',
+                    label: 'Repeated vomiting',
                   },
                   {
                     key: 'neurological_danger_sign' as const,
-                    label: language === 'vi'
-                      ? 'Lú lẫn, co giật, yếu/tê tay chân hoặc khó nói'
-                      : 'Confusion, seizure, limb weakness/numbness, or trouble speaking',
+                    label: 'Confusion, seizure, limb weakness/numbness, or trouble speaking',
                   },
                 ].map((item) => (
                   <label
@@ -1724,18 +1687,10 @@ const featureLabels: Record<string, Record<string, string>> = {
     const primary = getFeatureLabel(String(sorted[0]?.feature || ''));
     const secondary = getFeatureLabel(String(sorted[1]?.feature || ''));
 
-    switch (language) {
-      case 'en':
-        return {
-          trends: `Current recovery load level: ${levelLabel} (confidence ${confidencePct}%). Top trends: ${formatTop(3)}.`,
-          touchpoints: `Strongest drivers: ${formatTop(2)}. Prioritize ${primary}${secondary ? ` and ${secondary}` : ''}.`
-        };
-      default:
-        return {
-          trends: `Mức tải hồi phục hiện tại: ${levelLabel} (độ chính xác ${confidencePct}%). Xu hướng chính: ${formatTop(3)}.`,
-          touchpoints: `Các yếu tố ảnh hưởng mạnh nhất: ${formatTop(2)}. Ưu tiên theo dõi ${primary}${secondary ? ` và ${secondary}` : ''}.`
-        };
-    }
+    return {
+      trends: `Current recovery load level: ${levelLabel} (confidence ${confidencePct}%). Top trends: ${formatTop(3)}.`,
+      touchpoints: `Strongest drivers: ${formatTop(2)}. Prioritize ${primary}${secondary ? ` and ${secondary}` : ''}.`
+    };
   };
 
   // ─── Dashboard Chart Data ───────────────────────────────────────────────
@@ -1770,11 +1725,14 @@ const featureLabels: Record<string, Record<string, string>> = {
       const mood = Math.round((mo / 5) * 100);
 
       const getRadarLabel = (cat: string) => {
-        const radMap: any = {
-          en: { symptoms: "Symptoms", sleep: "Sleep", cognitiveLoad: "Cognitive Load", physicalActivity: "Physical Activity", mood: "Mood" },
-          vi: { symptoms: "Triệu chứng", sleep: "Giấc ngủ", cognitiveLoad: "Tải nhận thức", physicalActivity: "Vận động thể chất", mood: "Tâm trạng" },
+        const radMap: Record<string, string> = {
+          symptoms: "Symptoms",
+          sleep: "Sleep",
+          cognitiveLoad: "Cognitive Load",
+          physicalActivity: "Physical Activity",
+          mood: "Mood",
         };
-        return radMap[language]?.[cat] || radMap.en[cat];
+        return radMap[cat] || cat;
       };
 
       return [
@@ -1890,7 +1848,7 @@ const featureLabels: Record<string, Record<string, string>> = {
           label: new Date(
             `${item.checkin_date}T00:00:00`
           ).toLocaleDateString(
-            language === 'vi' ? 'vi-VN' : 'en-US',
+            'en-US',
             {
               weekday: 'short',
             }
@@ -2157,7 +2115,7 @@ const featureLabels: Record<string, Record<string, string>> = {
     const trendData = buildStressTrendData();
     const calendar = buildCalendarData();
     const peerData = buildPeerData();
-    const localeMap: Record<string, string> = { vi: 'vi-VN', en: 'en-US' };
+    const localeMap: Record<string, string> = { en: 'en-US' };
     const monthName = new Date(calendar.year, calendar.month).toLocaleString(localeMap[language], { month: 'long', year: 'numeric' });
     const dayLabels = [t('ui.calendar.mon'), t('ui.calendar.tue'), t('ui.calendar.wed'), t('ui.calendar.thu'), t('ui.calendar.fri'), t('ui.calendar.sat'), t('ui.calendar.sun')];
     const stressColors = [
@@ -2979,7 +2937,7 @@ const featureLabels: Record<string, Record<string, string>> = {
 
             <div className="flex items-center gap-3">
 
-              {/* Print button — chỉ hiện ở trang kết quả */}
+              {/* Print button - results view only */}
               {isCompleted && aiResult && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.8 }}
@@ -3001,10 +2959,10 @@ const featureLabels: Record<string, Record<string, string>> = {
                       ? 'bg-white/10 border-white/20 text-slate-200 hover:bg-white/20'
                       : 'bg-white/60 border-white/60 text-slate-700 hover:bg-white/90'
                   }`}
-                  title="In báo cáo"
+                  title="Print report"
                 >
                   <Printer className="w-4 h-4" />
-                  In
+                  Print
                 </motion.button>
               )}
 
@@ -3128,51 +3086,6 @@ const featureLabels: Record<string, Record<string, string>> = {
                   )}
                 </>
               )}
-              {/* Language switcher */}
-              <div className="relative z-50" ref={languageMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsLanguageMenuOpen(prev => !prev)}
-                  aria-label={t('ui.languageSwitcher')}
-                  className={`flex items-center rounded-full p-1 pr-3 cursor-pointer transition-colors border ${isDarkMode
-                    ? 'bg-black/90 hover:bg-black border-white/10 shadow-lg shadow-black/20'
-                    : 'bg-white/60 hover:bg-white/90 border-white/60 shadow-sm'
-                    }`}
-                >
-                  <img
-                    src={`https://hatscripts.github.io/circle-flags/flags/${language === 'en' ? 'gb' : 'vn'}.svg`}
-                    alt="flag"
-                    className="w-6 h-6 rounded-full object-cover mr-2 shadow-sm"
-                  />
-                  <span className={`text-[13px] font-bold tracking-wider select-none pointer-events-none ${isDarkMode ? 'text-white' : 'text-[#0b132b]'}`}>
-                    {language === 'en' ? 'EN' : 'VI'}
-                  </span>
-                  <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${isLanguageMenuOpen ? 'rotate-180' : ''} ${isDarkMode ? 'text-gray-400' : 'text-slate-500'}`} />
-                </button>
-
-                {/* Dropdown Menu */}
-                <div className={`absolute top-full right-0 mt-2 w-48 transition-all duration-200 ${isLanguageMenuOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
-                  <div className={`py-2 rounded-2xl border shadow-xl backdrop-blur-xl ${isDarkMode ? 'bg-[#0f172a]/95 border-white/10 shadow-black/50' : 'bg-white/95 border-gray-200 shadow-xl'}`}>
-                    {languageOptions.map((lang) => (
-                      <button
-                        key={lang.code}
-                        onClick={() => {
-                          setLanguage(lang.code);
-                          setIsLanguageMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${language === lang.code ? (isDarkMode ? 'bg-teal-500/15 text-teal-300' : 'bg-teal-600/10 text-teal-700') : (isDarkMode ? 'text-gray-300 hover:bg-white/10 hover:text-white' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900')}`}
-                      >
-                        <img
-                          src={`https://hatscripts.github.io/circle-flags/flags/${lang.flag}.svg`}
-                          alt={lang.code}
-                          className="w-5 h-5 rounded-full object-cover shadow-sm"
-                        />
-                        <span className="font-medium text-sm">{lang.label} ({lang.code.toUpperCase()})</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -3987,7 +3900,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                                         {recommendationResult.summary}
                                       </p>
                                       <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${isDarkMode ? 'bg-slate-900 text-blue-200' : 'bg-white text-blue-800'}`}>
-                                        {language === 'vi' ? 'Độ tin cậy quyết định' : 'Decision confidence'}: {Math.round(recommendationResult.confidence_score * 100)}%
+                                        {'Decision confidence'}: {Math.round(recommendationResult.confidence_score * 100)}%
                                       </span>
                                     </div>
                                   </div>
@@ -4012,7 +3925,7 @@ const featureLabels: Record<string, Record<string, string>> = {
                                         icon={Icon}
                                         colorClass={colorClass}
                                         isBookmarked={bookmarkedRecs.includes(rec.id)}
-                                        detailsLabel={rec.evidence ? (language === 'vi' ? 'Tại sao?' : 'Why?') : t('ui.details')}
+                                        detailsLabel={rec.evidence ? ('Why?') : t('ui.details')}
                                         bookmarkAriaLabel={t('results.saveRec')}
                                         onBookmark={(e) => { e.stopPropagation(); toggleBookmark(rec.id); }}
                                         onDetailClick={() => setSelectedActionDetail(rec)}
@@ -4063,7 +3976,7 @@ const featureLabels: Record<string, Record<string, string>> = {
           </motion.div>
         )}
     </AnimatePresence>
-    <ChatWidget isDarkMode={isDarkMode} language={language} />
+    <ChatWidget isDarkMode={isDarkMode} />
   </div>
   );
 }

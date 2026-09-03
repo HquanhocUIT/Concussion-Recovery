@@ -21,43 +21,23 @@ errorDiv.style.cssText = `
 `;
 
 // Translation Data
-const translations = {
-    vi: {
-        signInTitle: "Đăng nhập",
-        signInSubtitle: "Để giữ kết nối với chúng tôi, vui lòng đăng nhập bằng thông tin cá nhân của bạn",
-        signUpTitle: "Tạo tài khoản",
-        signUpSubtitle: "Đăng ký với thông tin cá nhân của bạn để sử dụng tất cả các tính năng của trang web",
-        emailPlaceholder: "Email",
-        passwordPlaceholder: "Mật khẩu",
-        namePlaceholder: "Họ và tên",
-        signInBtn: "Đăng nhập",
-        signUpBtn: "Đăng ký",
-        errorInvalid: "Thông tin không chính xác. Thử demo/demo1",
-        fillAll: "Vui lòng điền đầy đủ thông tin để đăng ký.",
-        welcomeBack: "Chào mừng trở lại!",
-        helloFriend: "Chào bạn!"
-    },
-    en: {
-        signInTitle: "Sign In",
-        signInSubtitle: "To keep connected with us please login with your personal info",
-        signUpTitle: "Create Account",
-        signUpSubtitle: "Register with your personal details to use all of site features",
-        emailPlaceholder: "Email",
-        passwordPlaceholder: "Password",
-        namePlaceholder: "Name",
-        signInBtn: "Sign In",
-        signUpBtn: "Sign Up",
-        errorInvalid: "Invalid credentials. Try demo/demo1",
-        fillAll: "Please fill in all information to register.",
-        welcomeBack: "Welcome Back!",
-        helloFriend: "Hello, Friend!"
-    }
-    // Add fr, de, zh as needed...
-};
+const t = {
+    signInTitle: "Sign In",
+    signInSubtitle: "To keep connected with us please login with your personal info",
+    signUpTitle: "Create Account",
+    signUpSubtitle: "Register with your personal details to use all of site features",
+    emailPlaceholder: "Email",
+    passwordPlaceholder: "Password",
+    namePlaceholder: "Name",
+    signInBtn: "Sign In",
+    signUpBtn: "Sign Up",
+    errorInvalid: "Invalid credentials. Try demo/demo1",
+    fillAll: "Please fill in all information to register.",
+    welcomeBack: "Welcome Back!",
+    helloFriend: "Hello, Friend!"
+}
 
 function initTranslations() {
-    const lang = localStorage.getItem('concussionrecovery_language') || 'vi';
-    const t = translations[lang] || translations.vi;
 
     // Update Sign In Form
     document.querySelector('.sign-in h1').textContent = t.signInTitle;
@@ -108,7 +88,6 @@ signinBtn.addEventListener('click', (e) => {
     
     if (email === 'demo' && password === 'demo1') {
         // Success: set localStorage and close popup
-        const lang = localStorage.getItem('concussionrecovery_language') || 'vi';
         localStorage.setItem('concussionrecovery_currentUser', JSON.stringify({
             name: 'Demo User',
             email: 'demo@example.com'
@@ -116,8 +95,6 @@ signinBtn.addEventListener('click', (e) => {
         window.location.href = '/';
     } else {
         // Error
-        const lang = localStorage.getItem('concussionrecovery_language') || 'vi';
-        const t = translations[lang] || translations.vi;
         passwordInput.parentNode.insertBefore(errorDiv.cloneNode(true), passwordInput.nextSibling);
         errorDiv.textContent = t.errorInvalid;
         passwordInput.parentNode.appendChild(errorDiv.cloneNode(true));
@@ -140,8 +117,6 @@ signupBtn.addEventListener('click', (e) => {
         }));
         window.location.href = '/';
     } else {
-        const lang = localStorage.getItem('concussionrecovery_language') || 'vi';
-        const t = translations[lang] || translations.vi;
         alert(t.fillAll);
     }
 });
