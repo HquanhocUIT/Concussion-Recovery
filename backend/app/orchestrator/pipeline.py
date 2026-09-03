@@ -187,6 +187,11 @@ def run_recommendation_pipeline(
 
 CHAT_MIN_RELEVANCE_SCORE = 0.3
 
+_DISCLAIMER = (
+    "RE:ENTRY is decision support, not a diagnosis or a substitute for "
+    "professional medical care."
+)
+
 
 def run_chat_pipeline(
     request: ChatRequest,
@@ -212,7 +217,20 @@ def run_chat_pipeline(
     try:
         citations = evidence_client.retrieve(request.question, audience=request.audience, top_k=3)
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
-        citations = []
+        # The retrieval service is unreachable — on a sleeping free-tier
+        # instance the first call can fail while the container restarts.
+        # Report that honestly instead of claiming the corpus had no answer.
+        return ChatResponse(
+            status="evidence_unavailable",
+            answer=(
+                "The guideline evidence service could not be reached, so no answer is "
+                "shown. This is a service problem, not a statement about the guidelines. "
+                "Please try again in a moment."
+            ),
+            citations=[],
+            model_used="none",
+            disclaimer=_DISCLAIMER,
+        )
 
     citations = [item for item in citations if item.relevance_score >= CHAT_MIN_RELEVANCE_SCORE]
 
@@ -226,7 +244,7 @@ def run_chat_pipeline(
             ),
             citations=[],
             model_used="none",
-            disclaimer="RE:ENTRY is decision support, not a diagnosis or a substitute for professional medical care.",
+            disclaimer=_DISCLAIMER,
         )
 
     composer = composer or ChatComposer()

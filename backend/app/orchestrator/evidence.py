@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 import httpx
@@ -15,18 +16,39 @@ class RagEvidenceClient:
     # the first request. At 20s the backend gave up mid-load and reported
     # "no guideline evidence found" — indistinguishable, to a user, from the
     # corpus genuinely having no answer.
-    def __init__(self, base_url: str | None = None, timeout_seconds: float = 60.0):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout_seconds: float = 60.0,
+        max_attempts: int = 3,
+        retry_delay_seconds: float = 2.0,
+    ):
         self.base_url = (base_url or os.getenv("RAG_SERVICE_URL", "http://localhost:8100")).rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.max_attempts = max_attempts
+        self.retry_delay_seconds = retry_delay_seconds
 
     def retrieve(self, query: str, audience: str, top_k: int = 2) -> list[EvidenceCitation]:
-        response = httpx.get(
-            f"{self.base_url}/retrieve",
-            params={"q": query, "audience": audience, "top_k": top_k},
-            timeout=self.timeout_seconds,
-        )
-        response.raise_for_status()
-        return [self._validated_citation(item) for item in response.json()]
+        last_error: Exception | None = None
+
+        # A sleeping instance rejects the first call or two with 502/503 while
+        # the container restarts, then serves normally. Without a retry those
+        # transient failures reached the user as "no guideline evidence found".
+        for attempt in range(self.max_attempts):
+            try:
+                response = httpx.get(
+                    f"{self.base_url}/retrieve",
+                    params={"q": query, "audience": audience, "top_k": top_k},
+                    timeout=self.timeout_seconds,
+                )
+                response.raise_for_status()
+                return [self._validated_citation(item) for item in response.json()]
+            except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+                last_error = exc
+                if attempt < self.max_attempts - 1:
+                    time.sleep(self.retry_delay_seconds)
+
+        raise last_error if last_error else RuntimeError("RAG retrieval failed")
 
     @staticmethod
     def _validated_citation(item: dict[str, Any]) -> EvidenceCitation:

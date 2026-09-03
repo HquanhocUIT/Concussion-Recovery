@@ -1,3 +1,4 @@
+import httpx
 from fastapi.testclient import TestClient
 
 from app.api.routes.chat import get_chat_composer, get_evidence_client
@@ -30,6 +31,35 @@ class StubEvidenceClient:
         assert query
         assert audience in {"general", "adult", "pediatric", "sport"}
         return self._results
+
+
+class FailingEvidenceClient:
+    """Stands in for a RAG service that cannot be reached at all."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def retrieve(self, query: str, audience: str, top_k: int = 3):
+        self.calls += 1
+        raise httpx.ConnectError("connection refused")
+
+
+def test_unreachable_rag_is_reported_as_unavailable_not_missing_evidence():
+    """A service outage must not be presented as "the corpus has no answer".
+
+    Both cases used to return an empty citation list and therefore the same
+    "no guideline evidence found" message, so a sleeping instance looked
+    identical to a question the guidelines genuinely do not cover.
+    """
+    evidence = FailingEvidenceClient()
+    request = ChatRequest(question="How soon can I return to sport?")
+
+    result = run_chat_pipeline(request, evidence, ChatComposer(api_key=""))
+
+    assert result.status == "evidence_unavailable"
+    assert result.status != "no_evidence_found"
+    assert result.citations == []
+    assert "service" in result.answer.lower()
 
 
 def test_red_flag_blocks_rag_and_composer_path():
