@@ -3,18 +3,32 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 import httpx
 
+from app.orchestrator.llm_client import LlmUnavailable, complete_json, resolve_provider
 from app.schemas.recommendation import EvidenceCitation, PlannerResult
 
 
 class RecommendationComposer:
     def __init__(self, api_key: str | None = None, model: str | None = None):
-        self.api_key = api_key if api_key is not None else os.getenv("ANTHROPIC_API_KEY", "")
-        self.model = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
+        # An explicitly passed key still wins (tests pass "" to force the
+        # deterministic path); otherwise whichever provider is configured.
+        self._forced_key = api_key
+        self._forced_model = model
+
+    @property
+    def api_key(self) -> str:
+        if self._forced_key is not None:
+            return self._forced_key
+        return resolve_provider()[1]
+
+    @property
+    def model(self) -> str:
+        if self._forced_model:
+            return self._forced_model
+        return resolve_provider()[2] or "deterministic-grounded-template"
 
     def compose(
         self,
@@ -26,7 +40,7 @@ class RecommendationComposer:
             return summary, explanations, "deterministic-grounded-template"
 
         try:
-            generated = self._call_claude(planner_result, evidence_by_option)
+            generated = self._call_llm(planner_result, evidence_by_option)
             llm_summary = str(generated.get("summary", "")).strip()
             llm_explanations = generated.get("explanations", {})
             if llm_summary and all(
@@ -37,7 +51,7 @@ class RecommendationComposer:
                     item.alternative_id: str(llm_explanations[item.alternative_id]).strip()
                     for item in planner_result.alternatives
                 }, self.model
-        except (httpx.HTTPError, ValueError, KeyError, json.JSONDecodeError):
+        except (httpx.HTTPError, ValueError, KeyError, json.JSONDecodeError, LlmUnavailable):
             pass
         return summary, explanations, "deterministic-grounded-template"
 
@@ -65,7 +79,7 @@ class RecommendationComposer:
             explanations,
         )
 
-    def _call_claude(
+    def _call_llm(
         self,
         planner_result: PlannerResult,
         evidence_by_option: dict[str, list[EvidenceCitation]],
@@ -84,20 +98,4 @@ class RecommendationComposer:
             "Return strict JSON with keys summary and explanations, where explanations maps every alternative_id to text.\n"
             + json.dumps(payload)
         )
-        response = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": self.model,
-                "max_tokens": 900,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=30.0,
-        )
-        response.raise_for_status()
-        text = response.json()["content"][0]["text"]
-        return json.loads(text)
+        return complete_json(prompt, max_tokens=900)

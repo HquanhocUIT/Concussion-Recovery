@@ -30,17 +30,22 @@ services:
         fromDatabase:
           name: reentry-db
           property: connectionString
+      # httpx needs a scheme; `property: host` yields a bare hostname.
       - key: RAG_SERVICE_URL
-        fromService:
-          type: web
-          name: reentry-rag
-          property: host
+        value: https://reentry-rag.onrender.com
       - key: SECRET_KEY
         generateValue: true
+      # Set ONE of these in the dashboard to have the assistant reword the
+      # retrieved evidence. With neither, the composers fall back to quoting
+      # guideline sentences verbatim, which still works but reads like a PDF.
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-5
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
 
   - type: web
     name: reentry-frontend
@@ -48,11 +53,11 @@ services:
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
     envVars:
+      # Vite inlines this at build time, so it must be a full origin.
+      # `property: host` yields the bare hostname ("reentry-backend"), which
+      # the browser resolves as a relative path against the frontend origin.
       - key: VITE_API_BASE_URL
-        fromService:
-          type: web
-          name: reentry-backend
-          property: host
+        value: https://reentry-backend.onrender.com
     routes:
       - type: rewrite
         source: /*

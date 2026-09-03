@@ -79,6 +79,10 @@ class CrossEncoderReranker:
     @property
     def model(self):
         if self._model is None:
+            # sentence-transformers is no longer installed: its PyTorch
+            # dependency does not fit the deployment container. Reaching here
+            # means cross_encoder.enabled was turned back on without adding
+            # the dependency, so fail loudly rather than silently degrading.
             from sentence_transformers import CrossEncoder
 
             self._model = CrossEncoder(self.model_name, device="cpu")

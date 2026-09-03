@@ -18,49 +18,34 @@ interface ChatMessage {
 
 interface ChatWidgetProps {
   isDarkMode: boolean;
-  language: 'vi' | 'en';
   audience?: RecommendationAudience;
 }
 
 const COPY = {
-  en: {
-    openLabel: 'Open guideline assistant',
-    closeLabel: 'Close guideline assistant',
-    title: 'Guideline Assistant',
-    subtitle: 'Answers are grounded in retrieved guideline evidence only.',
-    placeholder: 'Ask about concussion recovery guidelines…',
-    send: 'Send',
-    intro:
-      'Ask a short question about concussion recovery guidelines (e.g. "How soon can I return to sport?"). I only answer from the guideline sources in this system. I do not diagnose or give medical clearance — for symptom concerns, use Daily Check-in.',
-    emergency:
-      'This assistant does not evaluate emergency symptoms. Please use the Daily Check-in symptom questions, and seek immediate medical care if you selected a red-flag symptom.',
-    noEvidence:
-      'No matching guideline evidence was found for this question, so no answer is shown.',
-    error: 'Could not reach the assistant. Please try again.',
-  },
-  vi: {
-    openLabel: 'Mở trợ lý hướng dẫn',
-    closeLabel: 'Đóng trợ lý hướng dẫn',
-    title: 'Trợ Lý Hướng Dẫn',
-    subtitle: 'Câu trả lời chỉ dựa trên bằng chứng guideline đã tìm thấy.',
-    placeholder: 'Hỏi về hướng dẫn phục hồi chấn động não…',
-    send: 'Gửi',
-    intro:
-      'Hãy hỏi một câu ngắn về hướng dẫn phục hồi chấn động não (ví dụ: "Khi nào tôi có thể chơi thể thao trở lại?"). Tôi chỉ trả lời dựa trên nguồn guideline có trong hệ thống. Tôi không chẩn đoán hay xác nhận y khoa — nếu bạn lo lắng về triệu chứng, hãy dùng Check-in hàng ngày.',
-    emergency:
-      'Trợ lý này không đánh giá triệu chứng khẩn cấp. Vui lòng dùng câu hỏi triệu chứng ở Check-in hàng ngày, và tìm chăm sóc y tế ngay nếu bạn có chọn triệu chứng cảnh báo đỏ.',
-    noEvidence: 'Không tìm thấy bằng chứng guideline phù hợp cho câu hỏi này, nên không có câu trả lời.',
-    error: 'Không thể kết nối trợ lý. Vui lòng thử lại.',
-  },
+  openLabel: 'Open guideline assistant',
+  closeLabel: 'Close guideline assistant',
+  title: 'Guideline Assistant',
+  subtitle: 'Answers are grounded in retrieved guideline evidence only.',
+  placeholder: 'Ask about concussion recovery guidelines…',
+  send: 'Send',
+  intro:
+    'Ask a short question about concussion recovery guidelines (e.g. "How soon can I return to sport?"). I only answer from the guideline sources in this system. I do not diagnose or give medical clearance — for symptom concerns, use Daily Check-in.',
+  emergency:
+    'This assistant does not evaluate emergency symptoms. Please use the Daily Check-in symptom questions, and seek immediate medical care if you selected a red-flag symptom.',
+  noEvidence:
+    'No matching guideline evidence was found for this question, so no answer is shown.',
+  error: 'Could not reach the assistant. Please try again.',
+  unavailable:
+    'The guideline evidence service is starting up. Please try the question again in a moment.',
 } as const;
 
-export default function ChatWidget({ isDarkMode, language, audience = 'general' }: ChatWidgetProps) {
+export default function ChatWidget({ isDarkMode, audience = 'general' }: ChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const copy = COPY[language];
+  const copy = COPY;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -90,7 +75,12 @@ export default function ChatWidget({ isDarkMode, language, audience = 'general' 
           {
             id: `a-${Date.now()}`,
             role: 'assistant',
-            text: chatResult.status === 'no_evidence_found' ? copy.noEvidence : chatResult.answer,
+            text:
+              chatResult.status === 'no_evidence_found'
+                ? copy.noEvidence
+                : chatResult.status === 'evidence_unavailable'
+                  ? copy.unavailable
+                  : chatResult.answer,
             citations: chatResult.citations,
           },
         ]);

@@ -14,7 +14,11 @@ retrieval:
   candidate_k: 20
   reranker: hybrid_keyword_semantic_cross_encoder
   cross_encoder:
-    enabled: true
+    # Disabled: loading a second transformer alongside the embedder exceeds
+    # the 512 MB free-tier container and gets the service OOM-killed.
+    # rerank() falls back to hybrid keyword+semantic scoring when no
+    # cross-encoder scores are supplied.
+    enabled: false
     model: cross-encoder/ms-marco-MiniLM-L-6-v2
 
 llm:

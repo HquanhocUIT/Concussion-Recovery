@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from contextlib import asynccontextmanager
+from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
@@ -10,17 +12,57 @@ from src.ingestion.pipeline import build_retriever, build_store, ingest
 from src.retrieval.audience import Audience
 from src.retrieval.benchmark import run_benchmark
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Load the embedding model while the container is starting.
+
+    Otherwise the first /retrieve after a cold start pays the model load
+    (~40s on a free-tier instance) inside the request, which overran the
+    backend's HTTP timeout and surfaced to users as "no guideline evidence
+    found". /health deliberately does not touch the model, so it cannot be
+    used to confirm the service is ready to retrieve — /ready reports that.
+    """
+    try:
+        _cached_retriever()
+    except Exception:  # never block startup on a warm-up failure
+        pass
+    yield
+
+
 app = FastAPI(
     title="RE:ENTRY - RAG Evidence Service",
     description="Retrieves and cites medical guideline evidence for Recovery Engine decisions. "
     "This service explains recommendations; it does not generate them.",
     version="0.1.0",
+    lifespan=lifespan,
 )
+
+
+@lru_cache(maxsize=1)
+def _cached_retriever():
+    """Build the retriever once per process.
+
+    build_retriever() loads the embedding model, so calling it per request
+    re-loaded it every time — slow, and enough repeated allocation to get
+    the container OOM-killed on a small instance.
+    """
+    return build_retriever()
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    """Readiness: reports whether the model is loaded and the index is populated."""
+    try:
+        retriever = _cached_retriever()
+        return {"status": "ready", "chunks": retriever.vector_store.collection.count()}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Not ready: {exc}") from exc
 
 
 class RetrievalResult(BaseModel):
@@ -39,7 +81,7 @@ def retrieve(
     audience: Audience | None = None,
 ):
     try:
-        retriever = build_retriever()
+        retriever = _cached_retriever()
         if retriever.vector_store.collection.count() == 0:
             raise HTTPException(status_code=409, detail="Corpus not ingested. Run: python main.py ingest")
         return retriever.retrieve(q, top_k=top_k, audience=audience)

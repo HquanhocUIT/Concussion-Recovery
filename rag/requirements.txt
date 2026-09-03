@@ -2,7 +2,10 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 chromadb==1.5.9
-sentence-transformers==3.3.1
+# fastembed runs all-MiniLM-L6-v2 on onnxruntime (~11 MB) instead of
+# sentence-transformers, whose PyTorch dependency alone blows the 512 MB
+# free-tier container. Vectors are identical, so the index stays valid.
+fastembed==0.5.1
 pypdf==5.1.0
 PyYAML==6.0.2
 tiktoken==0.8.0

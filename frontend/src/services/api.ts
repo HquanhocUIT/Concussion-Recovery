@@ -300,7 +300,9 @@ export function createCheckin(payload: CheckinCreate): Promise<CheckinResponse> 
 export function getCheckins(
   userId: string
 ): Promise<CheckinListItem[]> {
-  return request<CheckinListItem[]>(`/checkins/${userId}`);
+  return request<CheckinListItem[]>(
+    `/check-ins?user_id=${encodeURIComponent(userId)}`
+  );
 }
 
 /** GET /recovery/profile/{user_id} */
@@ -351,7 +353,7 @@ export interface ChatRequest {
 }
 
 export interface ChatResponse {
-  status: "answered" | "no_evidence_found";
+  status: "answered" | "no_evidence_found" | "evidence_unavailable";
   answer: string;
   citations: EvidenceCitation[];
   model_used: string;
@@ -366,18 +368,3 @@ export function sendChatMessage(payload: ChatRequest): Promise<ChatResponse | Sa
   });
 }
 
-export interface SimulationHistoryItem {
-  simulation_id: string;
-  user_id: string;
-  label: string;
-  created_at: string;
-  result: ScenarioResult;
-}
-
-export interface SimulationHistoryItem {
-  simulation_id: string;
-  user_id: string;
-  label: string;
-  created_at: string;
-  result: ScenarioResult;
-}
