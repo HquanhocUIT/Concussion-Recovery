@@ -322,7 +322,7 @@ export default function App() {
   };
 
   const handleConfirmLogin = () => {
-    const modernLoginUrl = window.location.origin + '/src/Modern-Login-master/index.html';
+    const modernLoginUrl = window.location.origin + '/Modern-Login-master/index.html';
     window.location.assign(modernLoginUrl);
     setShowLoginConfirm(false);
   };
