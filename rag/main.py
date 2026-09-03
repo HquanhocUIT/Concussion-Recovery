@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
@@ -16,6 +17,17 @@ app = FastAPI(
     "This service explains recommendations; it does not generate them.",
     version="0.1.0",
 )
+
+
+@lru_cache(maxsize=1)
+def _cached_retriever():
+    """Build the retriever once per process.
+
+    build_retriever() loads the embedding model, so calling it per request
+    re-loaded it every time — slow, and enough repeated allocation to get
+    the container OOM-killed on a small instance.
+    """
+    return build_retriever()
 
 
 @app.get("/health")
@@ -39,7 +51,7 @@ def retrieve(
     audience: Audience | None = None,
 ):
     try:
-        retriever = build_retriever()
+        retriever = _cached_retriever()
         if retriever.vector_store.collection.count() == 0:
             raise HTTPException(status_code=409, detail="Corpus not ingested. Run: python main.py ingest")
         return retriever.retrieve(q, top_k=top_k, audience=audience)
