@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.db.database import Base, engine
+from app.orchestrator.llm_client import complete_json, resolve_provider
 
 from app.models.checkin import DailyCheckin
 from app.models.user import User
@@ -80,6 +81,40 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health/composer")
+def composer_health():
+    """Report which LLM provider is configured, without revealing the key.
+
+    The composers fall back to deterministic quoting on any failure, so a
+    missing key and a rejected key look identical in chat responses. This
+    says which one it is.
+    """
+
+    provider, api_key, model = resolve_provider()
+    if not provider:
+        return {
+            "provider": "none",
+            "detail": "No ANTHROPIC_API_KEY or GEMINI_API_KEY is set; answers quote guideline text verbatim.",
+        }
+
+    try:
+        complete_json(
+            'Reply with strict JSON: {"answer": "ok"}',
+            max_tokens=32,
+            timeout=20.0,
+        )
+    except Exception as exc:  # report, never raise: this is a diagnostic
+        return {
+            "provider": provider,
+            "model": model,
+            "key_present": True,
+            "reachable": False,
+            "detail": f"{type(exc).__name__}: {exc}"[:300],
+        }
+
+    return {"provider": provider, "model": model, "key_present": True, "reachable": True}
 
 
 @app.exception_handler(RequestValidationError)
