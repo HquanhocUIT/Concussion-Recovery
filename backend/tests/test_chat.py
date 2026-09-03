@@ -33,6 +33,31 @@ class StubEvidenceClient:
         return self._results
 
 
+class _StubResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+_CITATION_PAYLOAD = {
+    "text": "A gradual, symptom-limited return to activity is recommended.",
+    "citation": "Amsterdam 2022 Consensus Statement, p. 12, RETURN-TO-LEARN",
+    "rerank_score": 0.91,
+    "metadata": {
+        "source_id": "amsterdam-2022-consensus",
+        "title": "Amsterdam 2022 Consensus Statement",
+        "canonical_url": "https://bjsm.bmj.com/content/57/11/695",
+        "page": 12,
+        "section": "RETURN-TO-LEARN",
+    },
+}
+
+
 class FailingEvidenceClient:
     """Stands in for a RAG service that cannot be reached at all."""
 
@@ -42,6 +67,35 @@ class FailingEvidenceClient:
     def retrieve(self, query: str, audience: str, top_k: int = 3):
         self.calls += 1
         raise httpx.ConnectError("connection refused")
+
+
+def test_retrieval_retries_a_waking_service_before_giving_up(monkeypatch):
+    """A container coming back from sleep rejects the first calls, then serves.
+
+    /ready was measured at 22.9s on a cold free-tier instance, so the retry
+    window has to outlast that rather than give up after a couple of seconds.
+    """
+    from app.orchestrator.evidence import RagEvidenceClient
+
+    attempts = {"n": 0}
+    slept: list[float] = []
+
+    def fake_get(url, params=None, timeout=None):
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise httpx.ConnectError("container still waking")
+        return _StubResponse([_CITATION_PAYLOAD])
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr("app.orchestrator.evidence.time.sleep", slept.append)
+
+    client = RagEvidenceClient(base_url="http://rag.test")
+    citations = client.retrieve("How soon can I return to sport?", audience="general")
+
+    assert attempts["n"] == 3
+    assert len(citations) == 1
+    # Backs off rather than hammering: 2s then 4s.
+    assert slept == [2.0, 4.0]
 
 
 def test_unreachable_rag_is_reported_as_unavailable_not_missing_evidence():
