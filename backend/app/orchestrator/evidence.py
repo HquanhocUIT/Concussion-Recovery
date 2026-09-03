@@ -11,7 +11,11 @@ from app.schemas.recommendation import EvidenceCitation
 
 
 class RagEvidenceClient:
-    def __init__(self, base_url: str | None = None, timeout_seconds: float = 20.0):
+    # A cold free-tier RAG instance needs ~40s to load its embedding model on
+    # the first request. At 20s the backend gave up mid-load and reported
+    # "no guideline evidence found" — indistinguishable, to a user, from the
+    # corpus genuinely having no answer.
+    def __init__(self, base_url: str | None = None, timeout_seconds: float = 60.0):
         self.base_url = (base_url or os.getenv("RAG_SERVICE_URL", "http://localhost:8100")).rstrip("/")
         self.timeout_seconds = timeout_seconds
 
