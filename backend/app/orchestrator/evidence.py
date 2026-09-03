@@ -12,15 +12,20 @@ from app.schemas.recommendation import EvidenceCitation
 
 
 class RagEvidenceClient:
-    # A cold free-tier RAG instance needs ~40s to load its embedding model on
-    # the first request. At 20s the backend gave up mid-load and reported
-    # "no guideline evidence found" — indistinguishable, to a user, from the
-    # corpus genuinely having no answer.
+    """HTTP client for the RAG service, tolerant of a sleeping instance.
+
+    A free-tier container that has been idle takes measurable time to come
+    back: /ready was observed at 22.9s and the first /retrieve at ~40s. Fixed
+    2s retries gave up well inside that window, so the backend reported a
+    wakeup as a failure. The delays below back off 2s, 4s, 8s, 16s, 32s —
+    about 62s of total waiting, which covers the observed range.
+    """
+
     def __init__(
         self,
         base_url: str | None = None,
         timeout_seconds: float = 60.0,
-        max_attempts: int = 3,
+        max_attempts: int = 5,
         retry_delay_seconds: float = 2.0,
     ):
         self.base_url = (base_url or os.getenv("RAG_SERVICE_URL", "http://localhost:8100")).rstrip("/")
@@ -46,7 +51,7 @@ class RagEvidenceClient:
             except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
                 last_error = exc
                 if attempt < self.max_attempts - 1:
-                    time.sleep(self.retry_delay_seconds)
+                    time.sleep(self.retry_delay_seconds * (2**attempt))
 
         raise last_error if last_error else RuntimeError("RAG retrieval failed")
 

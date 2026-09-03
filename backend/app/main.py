@@ -1,3 +1,8 @@
+import os
+import threading
+from contextlib import asynccontextmanager
+
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,10 +25,37 @@ from app.api.routes.chat import router as chat_router
 from app.services.checkin_validation import CheckinValidationError
 from app.scenario_engine.activity_catalog import UnknownActivityError
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Wake the RAG service in the background as this process starts.
+
+    Both services sleep when idle on the free tier, and they wake
+    independently. Without this, the first user question pays the RAG
+    wakeup (~23s to /ready, ~40s to a first retrieval) inside the request.
+    Firing it here means the wakeup usually overlaps the backend's own
+    start, so by the time anyone asks something the evidence service is
+    already up. Failures are ignored: this is opportunistic, and retrieval
+    retries independently.
+    """
+
+    def _ping() -> None:
+        base = os.getenv("RAG_SERVICE_URL", "").rstrip("/")
+        if not base:
+            return
+        try:
+            httpx.get(f"{base}/ready", timeout=90.0)
+        except Exception:
+            pass
+
+    threading.Thread(target=_ping, daemon=True).start()
+    yield
+
+
 app = FastAPI(
     title="RE:ENTRY - Concussion Recovery API",
     description="Recovery Intelligence, Scenario Simulation, Planner, Safety and Orchestrator services.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 Base.metadata.create_all(bind=engine)
