@@ -1810,9 +1810,9 @@ const featureLabels: Record<string, Record<string, string>> = {
       const peerData = [
         {
           label: getFeatureLabel('sleep_quality'),
-          you: Math.round((sq / 5) * 10),
-          avg: 7,
-          unit: 'hrs',
+          you: sq,
+          avg: 3.5,
+          unit: '/5',
           youPct: Math.min(100, Math.round((sq / 5) * 100)),
           avgPct: 70,
         },
