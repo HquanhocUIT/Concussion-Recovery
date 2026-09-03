@@ -69,6 +69,42 @@ class FailingEvidenceClient:
         raise httpx.ConnectError("connection refused")
 
 
+def test_deterministic_answer_never_ends_mid_sentence():
+    """ Regression: the chat showed users a truncated fragment.
+
+    With no LLM configured the excerpt is displayed verbatim, and PDF chunks
+    can end mid-word (".. prevents a child/adolesc"). That reached the UI as an
+    answer that simply stopped, which for a clinical tool reads as a broken or
+    withheld instruction.
+    """
+    truncated_chunk = (
+        "ate symptoms, especially in the first days after injury. The use of these "
+        "devices can be increased according to symptom tolerance as the "
+        "child/adolescent recovers. For sleep hygiene purposes, these devices should "
+        "not be used in the hour prior to bedtime. Level of Evidence: C 2.4d Advise on "
+        "avoiding alcohol and other recreational drugs after a concussion. Alcohol and "
+        "recreational drugs may have a negative effect on concussion recovery. Avoiding "
+        "alcohol or drugs prevents a child/adolesc"
+    )
+    citation = EvidenceCitation(
+        excerpt=truncated_chunk,
+        citation="Living Guideline, p. 41, LIFESTYLE",
+        source_id="pedsconcussion-living-guideline",
+        source_title="PedsConcussion Living Guideline",
+        canonical_url="https://pedsconcussion.com/",
+        page=41,
+        section="LIFESTYLE",
+        relevance_score=0.82,
+    )
+
+    answer = ChatComposer(api_key="")._deterministic([citation])
+
+    assert answer.endswith((".", "!", "?")), answer
+    assert not answer.endswith("adolesc")
+    # Clause numbers such as "2.4d" must not be split into "2. 4d".
+    assert "2. 4d" not in answer
+
+
 def test_retrieval_retries_a_waking_service_before_giving_up(monkeypatch):
     """A container coming back from sleep rejects the first calls, then serves.
 
