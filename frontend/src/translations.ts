@@ -493,6 +493,9 @@ export const translations: Record<string, any> = {
       q11: "11. Số giờ học tập/làm việc hôm nay (0 = Không có, 5 = Rất nhiều)?",
       q12: "12. Mức độ khó đọc hoặc tập trung hôm nay (0 = Không có, 5 = Nặng)?",
       q13: "13. Bạn đánh giá tâm trạng hôm nay thế nào (0 = Rất thấp, 5 = Rất tốt)?",
+
+      yes: "Có",
+      no: "Không",
     },
     // Results & Emergency
     results: {
