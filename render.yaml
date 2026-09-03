@@ -35,10 +35,17 @@ services:
         value: https://reentry-rag.onrender.com
       - key: SECRET_KEY
         generateValue: true
+      # Set ONE of these in the dashboard to have the assistant reword the
+      # retrieved evidence. With neither, the composers fall back to quoting
+      # guideline sentences verbatim, which still works but reads like a PDF.
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-5
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
 
   - type: web
     name: reentry-frontend
