@@ -25,30 +25,44 @@ from app.api.routes.chat import router as chat_router
 from app.services.checkin_validation import CheckinValidationError
 from app.scenario_engine.activity_catalog import UnknownActivityError
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    """Wake the RAG service in the background as this process starts.
+# A sleeping free-tier RAG container takes ~23s to answer /ready and ~40s to
+# serve a first retrieval. That cannot be absorbed inside a request: the
+# platform edge cuts responses at roughly 30s, so waiting longer just moves
+# where the failure happens (measured: 22.9s, 26.9s, then 30.7s as the client
+# timeout was raised). The fix is to keep the service awake instead.
+_RAG_KEEPALIVE_INTERVAL_SECONDS = 10 * 60
 
-    Both services sleep when idle on the free tier, and they wake
-    independently. Without this, the first user question pays the RAG
-    wakeup (~23s to /ready, ~40s to a first retrieval) inside the request.
-    Firing it here means the wakeup usually overlaps the backend's own
-    start, so by the time anyone asks something the evidence service is
-    already up. Failures are ignored: this is opportunistic, and retrieval
-    retries independently.
+_rag_keepalive_stop = threading.Event()
+
+
+def _rag_keepalive() -> None:
+    """Poll the RAG service so the free tier does not put it to sleep.
+
+    Render sleeps an idle instance after ~15 minutes, so this runs well
+    inside that window. Every failure is ignored — this is best-effort, and
+    retrieval still retries on its own.
     """
-
-    def _ping() -> None:
-        base = os.getenv("RAG_SERVICE_URL", "").rstrip("/")
-        if not base:
-            return
+    base = os.getenv("RAG_SERVICE_URL", "").rstrip("/")
+    if not base:
+        return
+    while not _rag_keepalive_stop.is_set():
         try:
             httpx.get(f"{base}/ready", timeout=90.0)
         except Exception:
             pass
+        _rag_keepalive_stop.wait(_RAG_KEEPALIVE_INTERVAL_SECONDS)
 
-    threading.Thread(target=_ping, daemon=True).start()
-    yield
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Wake the RAG service at startup, then keep it awake."""
+
+    thread = threading.Thread(target=_rag_keepalive, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        _rag_keepalive_stop.set()
 
 
 app = FastAPI(
