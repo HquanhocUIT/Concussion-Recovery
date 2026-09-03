@@ -94,8 +94,10 @@ def test_retrieval_retries_a_waking_service_before_giving_up(monkeypatch):
 
     assert attempts["n"] == 3
     assert len(citations) == 1
-    # Backs off rather than hammering: 2s then 4s.
-    assert slept == [2.0, 4.0]
+    # Backs off rather than hammering: 1s then 2s. Deliberately short — a
+    # full cold start cannot be absorbed here (see RagEvidenceClient), so the
+    # budget stays inside the platform edge timeout and fails fast instead.
+    assert slept == [1.0, 2.0]
 
 
 def test_unreachable_rag_is_reported_as_unavailable_not_missing_evidence():

@@ -12,21 +12,23 @@ from app.schemas.recommendation import EvidenceCitation
 
 
 class RagEvidenceClient:
-    """HTTP client for the RAG service, tolerant of a sleeping instance.
+    """HTTP client for the RAG service, tolerant of brief unavailability.
 
-    A free-tier container that has been idle takes measurable time to come
-    back: /ready was observed at 22.9s and the first /retrieve at ~40s. Fixed
-    2s retries gave up well inside that window, so the backend reported a
-    wakeup as a failure. The delays below back off 2s, 4s, 8s, 16s, 32s —
-    about 62s of total waiting, which covers the observed range.
+    Retries exist for transient blips, not for a full cold start. A sleeping
+    container needs ~23s to reach /ready and ~40s to serve a first retrieval,
+    and the platform edge cuts the response at roughly 30s — so no retry
+    budget can cover a wakeup from inside the request. Raising the budget
+    only moved the failure later (measured 22.9s, then 26.9s, then 30.7s at
+    the edge limit). Keeping the service awake is handled in main.py; this
+    stays short enough to fail fast and honestly within the edge window.
     """
 
     def __init__(
         self,
         base_url: str | None = None,
-        timeout_seconds: float = 60.0,
-        max_attempts: int = 5,
-        retry_delay_seconds: float = 2.0,
+        timeout_seconds: float = 25.0,
+        max_attempts: int = 3,
+        retry_delay_seconds: float = 1.0,
     ):
         self.base_url = (base_url or os.getenv("RAG_SERVICE_URL", "http://localhost:8100")).rstrip("/")
         self.timeout_seconds = timeout_seconds
