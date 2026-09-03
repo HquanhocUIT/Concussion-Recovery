@@ -35,6 +35,8 @@ const COPY = {
   noEvidence:
     'No matching guideline evidence was found for this question, so no answer is shown.',
   error: 'Could not reach the assistant. Please try again.',
+  unavailable:
+    'The guideline evidence service is starting up. Please try the question again in a moment.',
 } as const;
 
 export default function ChatWidget({ isDarkMode, audience = 'general' }: ChatWidgetProps) {
@@ -73,7 +75,12 @@ export default function ChatWidget({ isDarkMode, audience = 'general' }: ChatWid
           {
             id: `a-${Date.now()}`,
             role: 'assistant',
-            text: chatResult.status === 'no_evidence_found' ? copy.noEvidence : chatResult.answer,
+            text:
+              chatResult.status === 'no_evidence_found'
+                ? copy.noEvidence
+                : chatResult.status === 'evidence_unavailable'
+                  ? copy.unavailable
+                  : chatResult.answer,
             citations: chatResult.citations,
           },
         ]);

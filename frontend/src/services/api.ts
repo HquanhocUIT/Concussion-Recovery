@@ -353,7 +353,7 @@ export interface ChatRequest {
 }
 
 export interface ChatResponse {
-  status: "answered" | "no_evidence_found";
+  status: "answered" | "no_evidence_found" | "evidence_unavailable";
   answer: string;
   citations: EvidenceCitation[];
   model_used: string;

@@ -17,7 +17,11 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    status: Literal["answered", "no_evidence_found"]
+    # "no_evidence_found" means the corpus genuinely had nothing above the
+    # relevance threshold. "evidence_unavailable" means the retrieval service
+    # could not be reached at all — a very different thing to tell a user, and
+    # previously indistinguishable because both returned an empty citation list.
+    status: Literal["answered", "no_evidence_found", "evidence_unavailable"]
     answer: str
     citations: list[EvidenceCitation]
     model_used: str
