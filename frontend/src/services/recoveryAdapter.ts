@@ -172,38 +172,58 @@ function toConfidenceScore(viewModel: RecoveryResultViewModel): number {
   return Math.round(((uncertaintyScore + sufficiencyScore) / 2) * 100) / 100;
 }
 
+/** Turn a backend identifier such as `insufficient_personalization_data`
+ * into a readable heading. These ids were previously rendered straight
+ * into card titles, so users saw raw snake_case. */
+function humaniseFactor(factor: string): string {
+  const words = factor.replace(/_/g, ' ').trim();
+  if (!words) return 'Model note';
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Rank the drivers the engine actually reported, so the Impact Factors bar
+ * and Critical Touchpoints have something to show. The backend returns no
+ * numeric weights, so these are evenly spread and are ordering only — not a
+ * measured contribution. */
+function toFeatureImportance(
+  viewModel: RecoveryResultViewModel
+): AIRecommendation['feature_importance'] {
+  const drivers = (viewModel.simulation?.explanationFactors ?? [])
+    .filter((factor) => factor.direction === 'increases_concern')
+    .map((factor) => factor.factor);
+
+  const unique = [...new Set(drivers)].slice(0, 4);
+  if (unique.length === 0) return [];
+
+  const share = 100 / unique.length;
+  return unique.map((feature) => ({
+    feature,
+    importance: Math.round(share),
+  }));
+}
+
 export function viewModelToAIRecommendation(
   viewModel: RecoveryResultViewModel
 ): AIRecommendation {
-  const recommendations: AIRecommendation['recommendations'] = [
-    ...viewModel.limitations.map((text, i) => ({
-      reco_id: `limitation-${i}`,
-      category: 'limitation',
-      title: 'Limitation',
-      description: text,
-    })),
-
-    ...(viewModel.simulation?.explanationFactors ?? [])
-      .filter((f) => f.category !== 'clinical_evidence')
-      .map((f, i) => ({
-        reco_id: `factor-${i}`,
-        category: f.category,
-        title: f.factor,
-        description: f.description,
-      })),
-
-    ...viewModel.observedPatterns.map((p, i) => ({
-      reco_id: `pattern-${i}`,
-      category: p.type,
-      title: 'Observed pattern',
-      description: p.description,
-    })),
-  ];
+  // Only model factors are offered as actions. Limitations and observed
+  // patterns are context about the analysis, not steps a person can take,
+  // and rendering them as action cards produced four identical
+  // "Limitation" tiles under a "Recommended Actions" heading.
+  const recommendations: AIRecommendation['recommendations'] = (
+    viewModel.simulation?.explanationFactors ?? []
+  )
+    .filter((f) => f.category !== 'clinical_evidence')
+    .map((f, i) => ({
+      reco_id: `factor-${i}`,
+      category: f.category,
+      title: humaniseFactor(f.factor),
+      description: f.description,
+    }));
 
   return {
     recovery_load_level: toRecoveryLoadLevel(viewModel),
     confidence_score: toConfidenceScore(viewModel),
-    feature_importance: [],
+    feature_importance: toFeatureImportance(viewModel),
     recommendations,
   };
 }
