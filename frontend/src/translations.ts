@@ -351,7 +351,6 @@ export const translations: Record<string, any> = {
       dashboard: {
         title: "Recovery Dashboard",
         subtitle: "Your concussion recovery story, visualized through the lens of data.",
-        period: "April 2026",
         lifeBalance: "Recovery Overview",
         lifeBalanceDesc: "Your current recovery status based on your latest check-in.",
         stressTrend: "Recovery Load Trend",

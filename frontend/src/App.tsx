@@ -162,7 +162,7 @@ const ActionCard = ({ id, title, description, icon: Icon, colorClass, isBookmark
     <div onClick={onDetailClick} className="analytics-glass-card dark:bg-slate-800/50 border border-white/50 dark:border-white/10 shadow-[0_12px_32px_rgba(45,51,55,0.1)] rounded-[2.5rem] overflow-hidden p-8 flex flex-col items-center text-center h-full transition-all duration-300 hover:-translate-y-2 group cursor-pointer w-full max-w-md">
       <div className="flex-1 w-full" onClick={(e) => e.stopPropagation()}>
         <h4
-          className={`text-2xl font-extrabold mb-4 ${isDarkMode ? 'text-white' : 'text-black'}`}
+          className={`text-2xl font-extrabold mb-4 break-words ${isDarkMode ? 'text-white' : 'text-black'}`}
           style={{ 
             fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif",
             color: isDarkMode ? '#ffffff' : '#000000'
@@ -537,7 +537,25 @@ const featureLabels: Record<string, Record<string, string>> = {
       }
     };
 
+    // The Recovery Load Trend chart and the Symptom Calendar both read
+    // `checkins`. getCheckins was imported but never called, so the state
+    // stayed empty and both rendered blank.
+    const loadCheckins = async () => {
+      try {
+        const history = await getCheckins(activeDemoUserId);
+        if (!cancelled) {
+          setCheckins(history);
+        }
+      } catch (error) {
+        console.error('Failed to load check-ins:', error);
+        if (!cancelled) {
+          setCheckins([]);
+        }
+      }
+    };
+
     loadRecoveryProfile();
+    loadCheckins();
 
     return () => {
       cancelled = true;
@@ -2141,7 +2159,7 @@ const featureLabels: Record<string, Record<string, string>> = {
           </div>
           <div className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold uppercase tracking-widest shrink-0 ${isDarkMode ? 'bg-teal-500/15 text-teal-300 border border-teal-500/30' : 'bg-teal-600/10 text-teal-700 border border-teal-200'
             }`} style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>
-            <Activity className="w-4 h-4" /> {t('ui.dashboard.period')}
+            <Activity className="w-4 h-4" /> {monthName}
           </div>
         </div>
 
@@ -2786,6 +2804,16 @@ const featureLabels: Record<string, Record<string, string>> = {
     needs: { titleKey: 'results.actionCards.needsTitle', descKey: 'results.actionCards.needsDesc' },
     weekPlan: { titleKey: 'results.actionCards.weekPlanTitle', descKey: 'results.actionCards.weekPlanDesc' },
   };
+
+  // Caveats about how to read the result, kept out of the action cards.
+  // The backend's disclaimer is appended so the medical-advice boundary is
+  // stated wherever the analysis is shown.
+  const analysisLimitations: string[] = !isSafetyBlocked && recommendationResult
+    ? [
+        ...recommendationResult.limitations,
+        ...(recommendationResult.disclaimer ? [recommendationResult.disclaimer] : []),
+      ]
+    : [];
 
   const actionCards: ActionCardItem[] = !isSafetyBlocked && aiResult
     ? (() => {
@@ -3940,6 +3968,26 @@ const featureLabels: Record<string, Record<string, string>> = {
                                       className={`${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'} font-medium text-sm underline underline-offset-4`}>
                                       {showAllRecs ? t('ui.showLess') : tWith('ui.showMore', { count: actionCards.length - 4 })}
                                     </button>
+                                  </div>
+                                )}
+                                {/* Analysis caveats. These are constraints on how the
+                                    result should be read, not actions — showing them as
+                                    action cards produced repeated "Limitation" tiles. */}
+                                {(analysisLimitations.length > 0) && (
+                                  <div className={`mt-8 rounded-2xl border p-5 ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white/60'}`}>
+                                    <h4 className={`text-xs font-bold uppercase tracking-widest mb-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
+                                      style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>
+                                      {'How to read this'}
+                                    </h4>
+                                    <ul className="space-y-2">
+                                      {analysisLimitations.map((text, i) => (
+                                        <li key={`limit-${i}`} className={`flex gap-2 text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}
+                                          style={{ fontFamily: "'Manrope', 'Inter', sans-serif" }}>
+                                          <span aria-hidden="true">·</span>
+                                          <span>{text}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
                                   </div>
                                 )}
                               </section>
