@@ -13,11 +13,14 @@ composers fall back to their deterministic templates.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -68,14 +71,10 @@ def list_gemini_models(api_key: str) -> list[str]:
     )
 
 
-def _discover_gemini_model(api_key: str) -> str | None:
-    """Ask the API which models this key may call, and pick a usable one.
+def _select_from(available: list[str]) -> str | None:
+    """Pick the best model out of what the key can call, or None if empty."""
 
-    Returns None if the listing cannot be read; the caller then falls back to
-    the configured default and surfaces whatever error the call produces.
-    """
-
-    usable = set(list_gemini_models(api_key))
+    usable = set(available)
     if not usable:
         return None
 
@@ -89,21 +88,45 @@ def _discover_gemini_model(api_key: str) -> str | None:
     return flash[0] if flash else sorted(usable)[0]
 
 
+def _discover_gemini_model(api_key: str) -> str | None:
+    """Ask the API which models this key may call, and pick a usable one."""
+
+    return _select_from(list_gemini_models(api_key))
+
+
 def _gemini_model() -> str:
-    """The Gemini model to call, discovered once and then cached."""
+    """The Gemini model to call, resolved once and then cached.
+
+    An explicit GEMINI_MODEL is honoured, but only if the key can actually
+    call it. A stale pinned value is otherwise indistinguishable from a
+    broken integration: it returns 404 per request and the assistant falls
+    back to quoting guideline text with no visible reason. That happened in
+    production with GEMINI_MODEL=gemini-2.0-flash against a key that offers
+    only 2.5-era models, and survived removing the value from the blueprint
+    because the deployment kept its own copy.
+    """
 
     global _resolved_gemini_model
 
+    if _resolved_gemini_model is not None:
+        return _resolved_gemini_model
+
+    api_key = (os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")).strip()
     explicit = os.getenv("GEMINI_MODEL", "").strip()
+    available = list_gemini_models(api_key) if api_key else []
+
     if explicit:
-        return explicit
+        # Trust it when the listing is unavailable — the caller may know
+        # something the listing does not.
+        if not available or explicit in available:
+            _resolved_gemini_model = explicit
+            return _resolved_gemini_model
+        logger.warning(
+            "GEMINI_MODEL=%s is not callable by this key; using a discovered model instead",
+            explicit,
+        )
 
-    if _resolved_gemini_model is None:
-        api_key = (os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")).strip()
-        _resolved_gemini_model = (
-            _discover_gemini_model(api_key) if api_key else None
-        ) or _DEFAULT_GEMINI_MODEL
-
+    _resolved_gemini_model = _select_from(available) or _DEFAULT_GEMINI_MODEL
     return _resolved_gemini_model
 
 
