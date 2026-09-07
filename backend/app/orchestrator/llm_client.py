@@ -21,9 +21,90 @@ import httpx
 
 _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+_GEMINI_LIST_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 _DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
-_DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
+
+# Gemini model names change, and a name that is not available to a given key
+# returns 404 at call time rather than anything more descriptive. Rather than
+# pin one, try these in order and fall back to asking the API what the key can
+# actually use. GEMINI_MODEL overrides all of it.
+_GEMINI_MODEL_CANDIDATES = (
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-pro",
+)
+_DEFAULT_GEMINI_MODEL = _GEMINI_MODEL_CANDIDATES[0]
+
+# Resolved once per process, so the discovery call is not repeated per request.
+_resolved_gemini_model: str | None = None
+
+
+def list_gemini_models(api_key: str) -> list[str]:
+    """Model names this key can call generateContent on. Empty if unknown.
+
+    Exposed for the /health/composer diagnostic: a 404 at call time means the
+    configured name is not one of these, which is otherwise hard to tell from
+    a key problem.
+    """
+
+    try:
+        response = httpx.get(
+            _GEMINI_LIST_URL,
+            headers={"x-goog-api-key": api_key},
+            timeout=20.0,
+        )
+        response.raise_for_status()
+        models = response.json().get("models", [])
+    except (httpx.HTTPError, ValueError, KeyError):
+        return []
+
+    return sorted(
+        m.get("name", "").removeprefix("models/")
+        for m in models
+        if "generateContent" in (m.get("supportedGenerationMethods") or [])
+    )
+
+
+def _discover_gemini_model(api_key: str) -> str | None:
+    """Ask the API which models this key may call, and pick a usable one.
+
+    Returns None if the listing cannot be read; the caller then falls back to
+    the configured default and surfaces whatever error the call produces.
+    """
+
+    usable = set(list_gemini_models(api_key))
+    if not usable:
+        return None
+
+    for candidate in _GEMINI_MODEL_CANDIDATES:
+        if candidate in usable:
+            return candidate
+
+    # Nothing from the preferred list: take a flash variant if there is one,
+    # since these are the cheapest and fastest, else anything usable.
+    flash = sorted(name for name in usable if "flash" in name)
+    return flash[0] if flash else sorted(usable)[0]
+
+
+def _gemini_model() -> str:
+    """The Gemini model to call, discovered once and then cached."""
+
+    global _resolved_gemini_model
+
+    explicit = os.getenv("GEMINI_MODEL", "").strip()
+    if explicit:
+        return explicit
+
+    if _resolved_gemini_model is None:
+        api_key = (os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")).strip()
+        _resolved_gemini_model = (
+            _discover_gemini_model(api_key) if api_key else None
+        ) or _DEFAULT_GEMINI_MODEL
+
+    return _resolved_gemini_model
 
 
 class LlmUnavailable(RuntimeError):
@@ -44,8 +125,7 @@ def resolve_provider() -> tuple[str, str, str]:
 
     gemini_key = (os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")).strip()
     if gemini_key:
-        model = os.getenv("GEMINI_MODEL", "").strip() or _DEFAULT_GEMINI_MODEL
-        return "gemini", gemini_key, model
+        return "gemini", gemini_key, _gemini_model()
 
     return "", "", ""
 

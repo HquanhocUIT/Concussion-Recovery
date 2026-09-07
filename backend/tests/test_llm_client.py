@@ -3,11 +3,20 @@
 import httpx
 import pytest
 
+from app.orchestrator import llm_client
 from app.orchestrator.llm_client import (
     LlmUnavailable,
     complete_json,
     resolve_provider,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_model_cache():
+    """The discovered Gemini model is cached per process; isolate each test."""
+    llm_client._resolved_gemini_model = None
+    yield
+    llm_client._resolved_gemini_model = None
 
 
 def test_no_key_configured_reports_unavailable(monkeypatch):
@@ -23,12 +32,61 @@ def test_gemini_key_alone_selects_gemini(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    # Discovery is a network call; stub it so the test stays offline.
+    monkeypatch.setattr(llm_client, "list_gemini_models", lambda key: [])
 
     provider, key, model = resolve_provider()
 
     assert provider == "gemini"
     assert key == "test-key"
     assert model.startswith("gemini")
+
+
+def test_an_explicit_model_is_used_without_discovery(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-pinned")
+
+    def _fail(_key):
+        raise AssertionError("discovery must not run when GEMINI_MODEL is set")
+
+    monkeypatch.setattr(llm_client, "list_gemini_models", _fail)
+
+    assert resolve_provider()[2] == "gemini-pinned"
+
+
+def test_a_model_the_key_cannot_call_is_not_selected(monkeypatch):
+    """Regression: a hardcoded default returned 404 in production.
+
+    /health/composer reported gemini-2.0-flash as
+    "404 Not Found ... :generateContent" while the key itself was valid, so
+    the model must come from what the key can actually call.
+    """
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.setattr(
+        llm_client, "list_gemini_models", lambda key: ["gemini-1.5-flash", "gemini-pro"]
+    )
+
+    model = resolve_provider()[2]
+
+    assert model == "gemini-1.5-flash"
+    assert model != "gemini-2.0-flash"
+
+
+def test_an_unlisted_flash_model_is_preferred(monkeypatch):
+    """None of the known names are offered, but a flash variant exists."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.setattr(
+        llm_client,
+        "list_gemini_models",
+        lambda key: ["gemini-9.9-pro-preview", "gemini-9.9-flash-preview"],
+    )
+
+    assert resolve_provider()[2] == "gemini-9.9-flash-preview"
 
 
 def test_anthropic_wins_when_both_keys_are_set(monkeypatch):
