@@ -44,8 +44,11 @@ services:
         value: claude-sonnet-5
       - key: GEMINI_API_KEY
         sync: false
+      # Left unset on purpose: the backend asks the API which models the key
+      # can call and picks one. Pinning a name here overrode that and produced
+      # a 404, because model availability differs per key.
       - key: GEMINI_MODEL
-        value: gemini-2.0-flash
+        sync: false
 
   - type: web
     name: reentry-frontend

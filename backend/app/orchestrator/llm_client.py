@@ -30,11 +30,11 @@ _DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
 # pin one, try these in order and fall back to asking the API what the key can
 # actually use. GEMINI_MODEL overrides all of it.
 _GEMINI_MODEL_CANDIDATES = (
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
     "gemini-2.0-flash",
-    "gemini-2.0-flash-001",
     "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-pro",
+    "gemini-2.5-pro",
 )
 _DEFAULT_GEMINI_MODEL = _GEMINI_MODEL_CANDIDATES[0]
 
