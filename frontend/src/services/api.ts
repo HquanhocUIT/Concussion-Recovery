@@ -368,3 +368,18 @@ export function sendChatMessage(payload: ChatRequest): Promise<ChatResponse | Sa
   });
 }
 
+/**
+ * Wake the backend as soon as the page loads.
+ *
+ * The frontend is a static site and never sleeps, but the backend and the
+ * RAG service do. Nothing woke the backend until a user submitted something,
+ * so the first real request paid the whole wakeup — which for chat looked
+ * like a broken assistant rather than a slow one.
+ *
+ * Waking the backend is enough to bring the whole chain up: its own startup
+ * begins polling the RAG service. Deliberately best-effort — failures are
+ * ignored and nothing waits on this.
+ */
+export function warmUpBackend(): void {
+  void fetch(`${API_BASE_URL}/health`, { method: "GET" }).catch(() => {});
+}

@@ -62,7 +62,17 @@ export default function ChatWidget({ isDarkMode, audience = 'general' }: ChatWid
     setIsSending(true);
 
     try {
-      const result = await sendChatMessage({ question, audience });
+      // One retry covers the case where this question is the first thing to
+      // hit a sleeping backend: the wakeup can outlast the initial request,
+      // and a bare failure reads as a broken assistant rather than a slow one.
+      let result;
+      try {
+        result = await sendChatMessage({ question, audience });
+      } catch (firstAttemptError) {
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        result = await sendChatMessage({ question, audience });
+        void firstAttemptError;
+      }
       if (isSafetyResult(result)) {
         setMessages((prev) => [
           ...prev,
