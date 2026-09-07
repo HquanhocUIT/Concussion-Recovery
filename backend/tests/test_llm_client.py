@@ -42,17 +42,48 @@ def test_gemini_key_alone_selects_gemini(monkeypatch):
     assert model.startswith("gemini")
 
 
-def test_an_explicit_model_is_used_without_discovery(monkeypatch):
+def test_an_explicit_model_the_key_can_call_is_honoured(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    monkeypatch.setenv("GEMINI_MODEL", "gemini-pinned")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-pro")
+    monkeypatch.setattr(
+        llm_client, "list_gemini_models", lambda key: ["gemini-2.5-flash", "gemini-2.5-pro"]
+    )
 
-    def _fail(_key):
-        raise AssertionError("discovery must not run when GEMINI_MODEL is set")
+    assert resolve_provider()[2] == "gemini-2.5-pro"
 
-    monkeypatch.setattr(llm_client, "list_gemini_models", _fail)
 
-    assert resolve_provider()[2] == "gemini-pinned"
+def test_an_explicit_model_is_trusted_when_the_listing_is_unavailable(monkeypatch):
+    """The caller may know something an unreadable listing does not."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-private-preview")
+    monkeypatch.setattr(llm_client, "list_gemini_models", lambda key: [])
+
+    assert resolve_provider()[2] == "gemini-private-preview"
+
+
+def test_a_stale_pinned_model_is_replaced_not_obeyed(monkeypatch):
+    """Regression: a stale GEMINI_MODEL kept the integration broken.
+
+    render.yaml pinned gemini-2.0-flash, the deployment kept its own copy of
+    that variable after the blueprint stopped setting it, and every request
+    404'd while the assistant silently quoted guideline text instead. An
+    explicit value must not outrank what the key can actually call.
+    """
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.0-flash")
+    monkeypatch.setattr(
+        llm_client,
+        "list_gemini_models",
+        lambda key: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview"],
+    )
+
+    model = resolve_provider()[2]
+
+    assert model == "gemini-2.5-flash"
+    assert model != "gemini-2.0-flash"
 
 
 def test_a_model_the_key_cannot_call_is_not_selected(monkeypatch):
