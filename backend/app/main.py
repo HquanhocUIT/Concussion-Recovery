@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.db.database import Base, engine
-from app.orchestrator.llm_client import complete_json, resolve_provider
+from app.orchestrator.llm_client import complete_json, list_gemini_models, resolve_provider
 
 from app.models.checkin import DailyCheckin
 from app.models.user import User
@@ -106,13 +106,25 @@ def composer_health():
             timeout=20.0,
         )
     except Exception as exc:  # report, never raise: this is a diagnostic
-        return {
+        result = {
             "provider": provider,
             "model": model,
             "key_present": True,
             "reachable": False,
             "detail": f"{type(exc).__name__}: {exc}"[:300],
         }
+        # A 404 means the model name is not available to this key rather than
+        # anything being wrong with the key, so list what it can actually call.
+        if provider == "gemini" and "404" in str(exc):
+            available = list_gemini_models(api_key)
+            if available:
+                result["available_models"] = available[:12]
+                result["hint"] = (
+                    "The configured model is not available to this key. Set "
+                    "GEMINI_MODEL to one of available_models, or leave it unset "
+                    "to let the service pick one."
+                )
+        return result
 
     return {"provider": provider, "model": model, "key_present": True, "reachable": True}
 
