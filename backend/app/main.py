@@ -119,11 +119,25 @@ def composer_health():
             available = list_gemini_models(api_key)
             if available:
                 result["available_models"] = available[:12]
-                result["hint"] = (
-                    "The configured model is not available to this key. Set "
-                    "GEMINI_MODEL to one of available_models, or leave it unset "
-                    "to let the service pick one."
-                )
+                if model in available:
+                    # The key can list the model but not call it. Seen with
+                    # keys that are not Google AI Studio API keys: listing is
+                    # permitted, generateContent is not.
+                    result["hint"] = (
+                        f"The key can list {model} but not call it, so this is a key "
+                        "permission problem rather than a model-name problem. Google "
+                        "AI Studio API keys start with 'AIza'; a key of another kind "
+                        "(for example an OAuth or Cloud token) can read the model "
+                        "list without being authorised to generate. Create a key at "
+                        "https://aistudio.google.com/app/apikey and set it as "
+                        "GEMINI_API_KEY."
+                    )
+                else:
+                    result["hint"] = (
+                        "The configured model is not available to this key. Set "
+                        "GEMINI_MODEL to one of available_models, or leave it unset "
+                        "to let the service pick one."
+                    )
         return result
 
     return {"provider": provider, "model": model, "key_present": True, "reachable": True}
