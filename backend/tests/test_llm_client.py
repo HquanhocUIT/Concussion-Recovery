@@ -75,6 +75,37 @@ def test_a_model_the_key_cannot_call_is_not_selected(monkeypatch):
     assert model != "gemini-2.0-flash"
 
 
+def test_picks_a_model_from_the_real_deployment_listing(monkeypatch):
+    """The listing the production key actually returned.
+
+    /health/composer reported 404 for gemini-2.0-flash while the key offered
+    only 2.5-era models, so the selection must come from this list rather than
+    from a name compiled into the client.
+    """
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.setattr(
+        llm_client,
+        "list_gemini_models",
+        lambda key: [
+            "antigravity-preview-05-2026",
+            "deep-research-max-preview-04-2026",
+            "gemini-2.5-computer-use-preview-10-2025",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-image",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-pro",
+            "gemini-3-flash-preview",
+        ],
+    )
+
+    model = resolve_provider()[2]
+
+    assert model == "gemini-2.5-flash"
+    assert model != "gemini-2.0-flash"
+
+
 def test_an_unlisted_flash_model_is_preferred(monkeypatch):
     """None of the known names are offered, but a flash variant exists."""
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
